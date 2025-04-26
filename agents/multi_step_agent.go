@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/agent_types"
 	"github.com/rizome-dev/smolagentsgo/memory"
 	"github.com/rizome-dev/smolagentsgo/models"
 	"github.com/rizome-dev/smolagentsgo/tools"
@@ -150,8 +149,12 @@ func NewBaseMultiStepAgent(
 	}
 
 	// Add FinalAnswerTool if needed
-	if _, exists := toolMap["final_answer"]; !exists {
-		toolMap["final_answer"] = tools.NewFinalAnswerTool()
+	if _, exists := toolMap["final_answer"]; !exists && addBaseTools {
+		finalAnswerTool, err := tools.NewFinalAnswerTool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create final answer tool: %w", err)
+		}
+		toolMap["final_answer"] = finalAnswerTool
 	}
 
 	// Set up managed agents
@@ -240,7 +243,7 @@ func (a *BaseMultiStepAgent) Run(
 		}
 
 		// Append additional args to task for clarity
-		a.Task += fmt.Sprintf("\nYou have been provided with these additional arguments, that you can access using the keys as variables in your python code:\n%v", additionalArgs)
+		a.Task += fmt.Sprintf("\nYou have been provided with these additional arguments, that you can access using the keys as variables in your code:\n%v", additionalArgs)
 	}
 
 	// Initialize system prompt
@@ -253,9 +256,14 @@ func (a *BaseMultiStepAgent) Run(
 
 	// Add task to memory
 	a.Memory.Steps = append(a.Memory.Steps, &memory.TaskStep{
-		Task:       a.Task,
-		TaskImages: images,
+		Task:      a.Task,
+		StartTime: time.Now(),
 	})
+
+	// Handle images if provided
+	if len(images) > 0 {
+		// Images will be processed in the first step
+	}
 
 	// Run the agent
 	if stream {
@@ -280,7 +288,9 @@ func (a *BaseMultiStepAgent) runStreaming(task string, maxSteps int, images []im
 		for finalAnswer == nil && a.StepNumber <= maxSteps {
 			if a.InterruptSwitch {
 				resultChan <- &memory.ActionStep{
-					Error: &utils.AgentError{Message: "Agent interrupted"},
+					Error:     utils.NewAgentExecutionError("Agent interrupted", nil),
+					StartTime: time.Now(),
+					EndTime:   time.Now(),
 				}
 				return
 			}
@@ -308,7 +318,9 @@ func (a *BaseMultiStepAgent) runStreaming(task string, maxSteps int, images []im
 				if genErr, ok := err.(*utils.AgentGenerationError); ok {
 					// Agent generation errors are implementation errors, so raise them
 					resultChan <- &memory.ActionStep{
-						Error: &utils.AgentError{Message: genErr.Error()},
+						Error:     utils.NewAgentExecutionError(genErr.Error(), nil),
+						StartTime: time.Now(),
+						EndTime:   time.Now(),
 					}
 					return
 				}
@@ -331,10 +343,10 @@ func (a *BaseMultiStepAgent) runStreaming(task string, maxSteps int, images []im
 			finalMemoryStep := &memory.ActionStep{
 				StepNumber: a.StepNumber,
 				Error:      utils.NewAgentMaxStepsError("Reached max steps.", nil),
+				StartTime:  stepStartTime,
+				EndTime:    time.Now(),
 			}
 			finalMemoryStep.ActionOutput = finalAnswer
-
-			finalMemoryStep.EndTime = time.Now()
 			finalMemoryStep.Duration = time.Since(stepStartTime).Seconds()
 
 			a.Memory.Steps = append(a.Memory.Steps, finalMemoryStep)
@@ -343,7 +355,8 @@ func (a *BaseMultiStepAgent) runStreaming(task string, maxSteps int, images []im
 
 		// Send final answer
 		resultChan <- &memory.FinalAnswerStep{
-			FinalAnswer: agent_types.HandleAgentOutputTypes(finalAnswer, ""),
+			FinalAnswer: HandleAgentOutputTypes(finalAnswer, ""),
+			StartTime:   time.Now(),
 		}
 	}()
 
@@ -388,7 +401,7 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 
 		inputMessages = []models.Message{
 			{
-				Role: models.MessageRoleUser,
+				Role: models.RoleUser,
 				Content: []models.MessageContent{
 					{
 						Type: "text",
@@ -402,7 +415,7 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 		if err != nil {
 			// Handle error gracefully
 			planMessage = &models.ChatMessage{
-				Role:    string(models.MessageRoleAssistant),
+				Role:    models.RoleAssistant,
 				Content: "Error creating initial plan: " + err.Error(),
 			}
 		}
@@ -433,7 +446,7 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 
 		inputMessages = append([]models.Message{
 			{
-				Role: models.MessageRoleSystem,
+				Role: models.RoleSystem,
 				Content: []models.MessageContent{
 					{
 						Type: "text",
@@ -444,7 +457,7 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 		}, memoryMessages...)
 
 		inputMessages = append(inputMessages, models.Message{
-			Role: models.MessageRoleUser,
+			Role: models.RoleUser,
 			Content: []models.MessageContent{
 				{
 					Type: "text",
@@ -457,7 +470,7 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 		if err != nil {
 			// Handle error gracefully
 			planMessage = &models.ChatMessage{
-				Role:    string(models.MessageRoleAssistant),
+				Role:    models.RoleAssistant,
 				Content: "Error updating plan: " + err.Error(),
 			}
 		}
@@ -465,11 +478,16 @@ func (a *BaseMultiStepAgent) createPlanningStep(task string, isFirstStep bool, s
 		plan = fmt.Sprintf("I still need to solve the task I was given:\n```\n%s\n```\n\nHere are the facts I know and my new/updated plan of action to solve the task:\n```\n%s\n```", a.Task, planMessage.Content)
 	}
 
-	return &memory.PlanningStep{
+	planningStep := &memory.PlanningStep{
 		ModelInputMessages: inputMessages,
 		Plan:               plan,
 		ModelOutputMessage: planMessage,
+		StartTime:          time.Now(),
+		EndTime:            time.Now(),
+		StepNumber:         step,
 	}
+
+	return planningStep
 }
 
 // finalizeStep completes a step with end time and duration, and calls callbacks
@@ -527,7 +545,7 @@ func (a *BaseMultiStepAgent) provideFinalAnswer(task string, images []image.Imag
 
 	inputMessages := append([]models.Message{
 		{
-			Role: models.MessageRoleSystem,
+			Role: models.RoleSystem,
 			Content: []models.MessageContent{
 				{
 					Type: "text",
@@ -538,7 +556,7 @@ func (a *BaseMultiStepAgent) provideFinalAnswer(task string, images []image.Imag
 	}, memoryMessages...)
 
 	inputMessages = append(inputMessages, models.Message{
-		Role: models.MessageRoleUser,
+		Role: models.RoleUser,
 		Content: []models.MessageContent{
 			{
 				Type: "text",
@@ -552,13 +570,13 @@ func (a *BaseMultiStepAgent) provideFinalAnswer(task string, images []image.Imag
 		imgContents := make([]models.MessageContent, len(images))
 		for i, img := range images {
 			imgContents[i] = models.MessageContent{
-				Type:  "image",
-				Image: img,
+				Type:      "image",
+				ImageData: img,
 			}
 		}
 
 		inputMessages = append(inputMessages, models.Message{
-			Role:    models.MessageRoleUser,
+			Role:    models.RoleUser,
 			Content: imgContents,
 		})
 	}

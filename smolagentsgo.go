@@ -6,10 +6,10 @@
 // - Support for any LLM: works with various LLM backends
 // - First-class support for Code Agents
 // - Clean abstractions: minimal abstractions above raw Go code
+// - Native support for Go's concurrency patterns
 package smolagentsgo
 
 import (
-	"github.com/rizome-dev/smolagentsgo/agent_types"
 	"github.com/rizome-dev/smolagentsgo/agents"
 	"github.com/rizome-dev/smolagentsgo/memory"
 	"github.com/rizome-dev/smolagentsgo/models"
@@ -21,25 +21,25 @@ import (
 const Version = "0.1.0"
 
 // Export agent types
-type AgentType = agent_types.AgentType
-type AgentText = agent_types.AgentText
-type AgentImage = agent_types.AgentImage
-type AgentAudio = agent_types.AgentAudio
+type AgentType = agents.AgentType
+type AgentText = agents.AgentText
+type AgentImage = agents.AgentImage
+type AgentAudio = agents.AgentAudio
 
 // Export agent functions
-var HandleAgentOutputTypes = agent_types.HandleAgentOutputTypes
-var HandleAgentInputTypes = agent_types.HandleAgentInputTypes
-var EncodeImageBase64 = agent_types.EncodeImageBase64
-var MakeImageURL = agent_types.MakeImageURL
-var DecodeImageBase64 = agent_types.DecodeImageBase64
+var HandleAgentOutputTypes = agents.HandleAgentOutputTypes
+var HandleAgentInputTypes = agents.HandleAgentInputTypes
+var EncodeImageBase64 = agents.EncodeImageBase64
+var MakeImageURL = agents.MakeImageURL
+var DecodeImageBase64 = agents.DecodeImageBase64
 
 // Export agent constructors
-var NewAgentText = agent_types.NewAgentText
-var NewAgentImageFromImage = agent_types.NewAgentImageFromImage
-var NewAgentImageFromPath = agent_types.NewAgentImageFromPath
-var NewAgentImageFromBytes = agent_types.NewAgentImageFromBytes
-var NewAgentAudioFromBytes = agent_types.NewAgentAudioFromBytes
-var NewAgentAudioFromPath = agent_types.NewAgentAudioFromPath
+var NewAgentText = agents.NewAgentText
+var NewAgentImageFromImage = agents.NewAgentImageFromImage
+var NewAgentImageFromPath = agents.NewAgentImageFromPath
+var NewAgentImageFromBytes = agents.NewAgentImageFromBytes
+var NewAgentAudioFromBytes = agents.NewAgentAudioFromBytes
+var NewAgentAudioFromPath = agents.NewAgentAudioFromPath
 
 // Export agents
 type MultiStepAgent = agents.MultiStepAgent
@@ -48,7 +48,7 @@ type ToolCallingAgent = agents.ToolCallingAgent
 type CodeAgent = agents.CodeAgent
 type ManagedAgent = agents.ManagedAgent
 type ManagedAgentImpl = agents.ManagedAgentImpl
-type PythonExecutor = agents.PythonExecutor
+type GoExecutor = agents.GoExecutor
 
 // Export agent constructors
 var NewBaseMultiStepAgent = agents.NewBaseMultiStepAgent

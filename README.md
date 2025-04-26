@@ -11,111 +11,212 @@ built by: [rizome labs](https://rizome.dev)
 
 contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
-## Example
+## Examples
+
+- [Calculator](examples/calculator/main.go)
+- [Web Search](examples/web_search/main.go)
+
+## Creating a Go Code Agent
 
 ```go
 package main
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
+	"log"
 
 	"github.com/rizome-dev/smolagentsgo"
+	"github.com/rizome-dev/smolagentsgo/agents"
 	"github.com/rizome-dev/smolagentsgo/models"
 )
 
-// Simple model function that returns a fixed response
-func simpleModel(messages []models.Message, stopSequences []string) (*models.ChatMessage, error) {
-	// For demo purposes - pretends to be the LLM and returns a response
-	// In real usage, this would call an actual LLM API
-
-	// Simulate a model that responds with a final answer
-	response := "Thought: I'll use the calculator tool to compute 2 + 2\nAction: final_answer(answer=\"The result of 2 + 2 is 4\")"
-
-	// Check if we should stop generation at a specific sequence
-	if stopSequences != nil && len(stopSequences) > 0 {
-		for _, seq := range stopSequences {
-			if strings.Contains(response, seq) {
-				response = strings.Split(response, seq)[0]
-			}
-		}
-	}
-
-	return &models.ChatMessage{
-		Role:    "assistant",
-		Content: response,
-	}, nil
-}
-
-// Implementation of a simple calculator function
-func calculateExpression(args map[string]interface{}) (interface{}, error) {
-	expr, ok := args["expression"].(string)
-	if !ok {
-		return nil, fmt.Errorf("expression must be a string")
-	}
-
-	// Very simple calculator that can only handle addition
-	parts := strings.Split(expr, "+")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("only addition is supported in format: a + b")
-	}
-
-	// Parse the numbers
-	a, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid first number: %w", err)
-	}
-
-	b, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid second number: %w", err)
-	}
-
-	result := a + b
-	return fmt.Sprintf("%.2f", result), nil
-}
-
 func main() {
-	calculator := smolagentsgo.NewBaseTool(
-		"calculator",
-		"A simple calculator that can add, subtract, multiply, and divide",
-		map[string]smolagentsgo.InputProperty{
-			"expression": {
-				Type:        "string",
-				Description: "The mathematical expression to evaluate",
-			},
-		},
-		"string",
-		calculateExpression,
-	)
-
-	agent, err := smolagentsgo.NewToolCallingAgent(
-		[]smolagentsgo.Tool{calculator},
-		simpleModel, // Provide a model function
-		smolagentsgo.EmptyPromptTemplates(),
-		0,
-		20,
-		nil,
-		nil,
-		nil,
-		"math_agent",
-		"An agent that can solve math problems",
-		false,
-		nil,
-	)
+	// Create a Go code executor
+	goExecutor, err := agents.NewGoSandboxExecutor()
 	if err != nil {
-		fmt.Printf("Error creating agent: %v\n", err)
-		return
+		log.Fatalf("Failed to create Go executor: %v", err)
+	}
+	defer goExecutor.Cleanup()
+
+	// Define the model function (placeholder)
+	modelFunc := func(messages []models.Message, stopSequences []string) (*models.ChatMessage, error) {
+		// In a real implementation, this would call an actual LLM
+		return &models.ChatMessage{
+			Role:    models.RoleAssistant,
+			Content: "Thought: I need to calculate the factorial of 5.\nCode:\n```go\nfunc factorial(n int) int {\n  if n <= 1 {\n    return 1\n  }\n  return n * factorial(n-1)\n}\n\nfmt.Printf(\"Factorial of 5 is %d\\n\", factorial(5))\n```<end_code>",
+		}, nil
 	}
 
-	result, err := agent.Run("Calculate 2 + 2", false, true, nil, nil, 0)
+	// Create a code agent
+	agent, err := smolagentsgo.NewCodeAgent(
+		nil,                                // No extra tools
+		modelFunc,
+		smolagentsgo.EmptyPromptTemplates(), // Use default prompt templates
+		0,                                   // No planning
+		10,                                  // Max 10 steps
+		nil,                                 // Default grammar
+		nil,                                 // No managed agents
+		nil,                                 // No callbacks
+		"code_agent",                       // Agent name
+		"A Go code agent",                  // Description
+		false,                              // No run summary
+		nil,                                // No final answer checks
+		goExecutor,                         // Go executor
+	)
 	if err != nil {
-		fmt.Printf("Error running agent: %v\n", err)
-		return
+		log.Fatalf("Failed to create agent: %v", err)
+	}
+
+	// Run the agent
+	result, err := agent.Run("Calculate the factorial of 5", false, true, nil, nil, 0)
+	if err != nil {
+		log.Fatalf("Error running agent: %v", err)
 	}
 
 	fmt.Printf("Result: %v\n", result)
 }
 ```
- 
+
+## Multi-Agent Systems
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/rizome-dev/smolagentsgo"
+	"github.com/rizome-dev/smolagentsgo/agents"
+	"github.com/rizome-dev/smolagentsgo/models"
+	"github.com/rizome-dev/smolagentsgo/tools"
+)
+
+func main() {
+	// Define the model function (placeholder)
+	modelFunc := func(messages []models.Message, stopSequences []string) (*models.ChatMessage, error) {
+		// Simplified for example
+		return &models.ChatMessage{
+			Role:    models.RoleAssistant,
+			Content: "Thought: I'll delegate to the math_agent.\nAction: math_agent(task=\"Calculate 123 * 456\")",
+		}, nil
+	}
+
+	// Create a specialized math agent
+	mathAgent, err := smolagentsgo.NewToolCallingAgent(
+		[]tools.Tool{}, // Add math tools here
+		modelFunc,
+		smolagentsgo.EmptyPromptTemplates(),
+		0, 10, nil, nil, nil,
+		"math_solver",
+		"Solves math problems",
+		false, nil,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create math agent: %v", err)
+	}
+
+	// Create a managed agent wrapper
+	managedMathAgent, err := smolagentsgo.NewManagedAgent(
+		mathAgent,
+		"math_agent",
+		"A specialized agent for solving mathematical problems",
+	)
+	if err != nil {
+		log.Fatalf("Failed to create managed agent: %v", err)
+	}
+
+	// Create the manager agent
+	managerAgent, err := smolagentsgo.NewToolCallingAgent(
+		[]tools.Tool{},
+		modelFunc,
+		smolagentsgo.EmptyPromptTemplates(),
+		0, 10, nil,
+		[]agents.ManagedAgent{managedMathAgent},
+		nil,
+		"manager_agent",
+		"Coordinates other agents",
+		false, nil,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create manager agent: %v", err)
+	}
+
+	// Run the manager agent
+	result, err := managerAgent.Run("What is 123 * 456?", false, true, nil, nil, 0)
+	if err != nil {
+		log.Fatalf("Error running agent: %v", err)
+	}
+
+	fmt.Printf("Result: %v\n", result)
+}
+```
+
+## Concurrency with Go
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/rizome-dev/smolagentsgo"
+	// Import other necessary packages
+)
+
+func main() {
+	// Create multiple agents
+	// (agent setup code omitted for brevity)
+
+	var wg sync.WaitGroup
+	results := make(chan interface{}, 3)
+	errors := make(chan error, 3)
+
+	// Run multiple agents concurrently
+	for i, agent := range []smolagentsgo.MultiStepAgent{agent1, agent2, agent3} {
+		wg.Add(1)
+		go func(i int, a smolagentsgo.MultiStepAgent) {
+			defer wg.Done()
+			
+			// Each agent works on a different task
+			task := fmt.Sprintf("Task for agent %d", i)
+			result, err := a.Run(task, false, true, nil, nil, 0)
+			
+			if err != nil {
+				errors <- err
+				return
+			}
+			results <- result
+		}(i, agent)
+	}
+
+	// Wait for all agents to complete or timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All agents completed successfully
+		close(results)
+		close(errors)
+		
+		// Process results
+		for result := range results {
+			fmt.Printf("Result: %v\n", result)
+		}
+		
+		// Check for errors
+		for err := range errors {
+			fmt.Printf("Error: %v\n", err)
+		}
+		
+	case <-time.After(5 * time.Minute):
+		fmt.Println("Timeout: Some agents took too long")
+	}
+}
+```

@@ -2,7 +2,9 @@
 package agents
 
 import (
+	"context"
 	"fmt"
+	"image"
 	"regexp"
 	"strings"
 
@@ -12,27 +14,22 @@ import (
 )
 
 // DefaultCodeAgentSystemPrompt is the default system prompt for CodeAgent
-const DefaultCodeAgentSystemPrompt = "You are a problem-solving expert. You can solve complex problems using Python code.\n\nTo solve the problem, you'll go through multiple steps of reasoning and code execution. If you solve the problem, use the 'final_answer' tool with the solution to complete the task.\n\nFor each step:\n1. Think about what you've learned and what you need to do next.\n2. Write Python code to solve the problem or explore further.\n\nWhen writing code, use this format:\nThought: <your thinking about what to do next>\nCode:\n```python\n<your Python code>\n```<end_code>\n\nYour code will be executed in a Python environment. You can use the print() function to output results.\n\nYou can use these tools: {{ tools_description }}"
+const DefaultCodeAgentSystemPrompt = "You are a problem-solving expert. You can solve complex problems using Go code.\n\nTo solve the problem, you'll go through multiple steps of reasoning and code execution. If you solve the problem, use the 'final_answer' tool with the solution to complete the task.\n\nFor each step:\n1. Think about what you've learned and what you need to do next.\n2. Write Go code to solve the problem or explore further.\n\nWhen writing code, use this format:\nThought: <your thinking about what to do next>\nCode:\n```go\n<your Go code>\n```<end_code>\n\nYour code will be executed in a Go environment. You can use the fmt.Printf() function to output results.\n\nYou can use these tools: {{ tools_description }}"
 
 // DefaultCodeAgentSystemPromptWithManagedAgents extends the default prompt with managed agents
-const DefaultCodeAgentSystemPromptWithManagedAgents = "You are a problem-solving expert. You can solve complex problems using Python code and delegate to specialized agents.\n\nTo solve the problem, you'll go through multiple steps of reasoning, code execution, and agent delegation. If you solve the problem, use the 'final_answer' tool with the solution to complete the task.\n\nFor each step:\n1. Think about what you've learned and what you need to do next.\n2. Either write Python code or call a managed agent.\n\nWhen writing code, use this format:\nThought: <your thinking about what to do next>\nCode:\n```python\n<your Python code>\n```<end_code>\n\nWhen calling a managed agent, follow the examples in the 'final_answer' tool description.\n\nYour code will be executed in a Python environment. You can use the print() function to output results.\n\nYou can use these tools: {{ tools_description }}\n\nYou can also delegate to these specialized agents: {{ managed_agents_description }}"
+const DefaultCodeAgentSystemPromptWithManagedAgents = "You are a problem-solving expert. You can solve complex problems using Go code and delegate to specialized agents.\n\nTo solve the problem, you'll go through multiple steps of reasoning, code execution, and agent delegation. If you solve the problem, use the 'final_answer' tool with the solution to complete the task.\n\nFor each step:\n1. Think about what you've learned and what you need to do next.\n2. Either write Go code or call a managed agent.\n\nWhen writing code, use this format:\nThought: <your thinking about what to do next>\nCode:\n```go\n<your Go code>\n```<end_code>\n\nWhen calling a managed agent, follow the examples in the 'final_answer' tool description.\n\nYour code will be executed in a Go environment. You can use the fmt.Printf() function to output results.\n\nYou can use these tools: {{ tools_description }}\n\nYou can also delegate to these specialized agents: {{ managed_agents_description }}"
 
-// PythonExecutor is an interface for executing Python code
-type PythonExecutor interface {
-	Execute(code string) (string, error)
-	SendVariables(variables map[string]interface{}) error
-	SendTools(tools map[string]interface{}) error
-}
-
-// CodeAgent is an agent that uses Python code to solve problems
+// CodeAgent is an agent specialized in executing code.
+// It extends BaseMultiStepAgent with code execution capabilities.
 type CodeAgent struct {
 	*BaseMultiStepAgent
-	PythonExecutor PythonExecutor
+	executor CodeExecutor
 }
 
-// NewCodeAgent creates a new CodeAgent
+// NewCodeAgent creates a new CodeAgent with specified configuration.
+// It requires a model, memory, and code executor.
 func NewCodeAgent(
-	toolsList []tools.Tool,
+	agentTools []tools.Tool,
 	model ModelFunc,
 	promptTemplates PromptTemplates,
 	planningInterval int,
@@ -44,34 +41,18 @@ func NewCodeAgent(
 	description string,
 	provideRunSummary bool,
 	finalAnswerChecks []FinalAnswerCheck,
-	pythonExecutor PythonExecutor,
+	executor CodeExecutor,
 ) (*CodeAgent, error) {
-
-	// If no prompt templates provided, use default
-	if promptTemplates.SystemPrompt == "" {
-		promptTemplates = EmptyPromptTemplates()
-
-		if managedAgents != nil && len(managedAgents) > 0 {
-			promptTemplates.SystemPrompt = DefaultCodeAgentSystemPromptWithManagedAgents
-		} else {
-			promptTemplates.SystemPrompt = DefaultCodeAgentSystemPrompt
-		}
-	}
-
-	// Set default grammar if not provided
-	if grammar == nil {
-		grammar = map[string]string{
-			"type":  "regex",
-			"value": "Thought: .+?\\nCode:\\n```(?:py|python)?\\n(?:.|\\s)+?\\n```<end_code>",
-		}
+	if executor == nil {
+		return nil, fmt.Errorf("executor cannot be nil")
 	}
 
 	baseAgent, err := NewBaseMultiStepAgent(
-		toolsList,
+		agentTools,
 		model,
 		promptTemplates,
 		maxSteps,
-		true, // addBaseTools
+		true, // Add base tools
 		grammar,
 		managedAgents,
 		stepCallbacks,
@@ -81,35 +62,240 @@ func NewCodeAgent(
 		provideRunSummary,
 		finalAnswerChecks,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create base agent: %w", err)
+	}
+
+	return &CodeAgent{
+		BaseMultiStepAgent: baseAgent,
+		executor:           executor,
+	}, nil
+}
+
+// ExecuteCode runs the provided code using the agent's executor.
+// It supports different code languages and returns the execution result.
+func (a *CodeAgent) ExecuteCode(ctx context.Context, code string, language string) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	if code == "" {
+		return "", fmt.Errorf("code cannot be empty")
+	}
+
+	// Prepare code for execution
+	cleanCode := utils.TruncateContent(code, a.Model.MaximumContentLength())
+
+	// For Go code, ensure we have proper imports and a main function
+	if language == "go" {
+		cleanCode = prepareGoCodeForExecution(cleanCode)
+	}
+
+	// Execute the code
+	result, err := a.executor.Execute(ctx, cleanCode, language)
+	if err != nil {
+		return "", utils.NewAgentExecutionError(
+			fmt.Sprintf("code execution failed: %v", err),
+			err,
+		)
+	}
+
+	// Truncate result if needed
+	result = utils.TruncateContent(result, a.Model.MaximumContentLength())
+	return result, nil
+}
+
+// prepareGoCodeForExecution ensures the Go code is ready for execution.
+// It adds necessary imports and wraps code in a main function if needed.
+func prepareGoCodeForExecution(code string) string {
+	// Check if the code already has a package declaration
+	if !strings.Contains(code, "package main") {
+		// Check if there are imports
+		hasImports := strings.Contains(code, "import ")
+
+		if hasImports {
+			// Insert package before imports
+			code = "package main\n\n" + code
+		} else {
+			// Add package declaration
+			code = "package main\n\n" + code
+		}
+	}
+
+	// Check if the code has a main function
+	if !strings.Contains(code, "func main()") {
+		// Wrap the code in a main function
+		// Only include non-function code in main
+		lines := strings.Split(code, "\n")
+		var mainCode []string
+		var otherCode []string
+
+		inFunction := false
+		functionDepth := 0
+
+		for _, line := range lines {
+			trimLine := strings.TrimSpace(line)
+
+			// Check for function declarations
+			if strings.HasPrefix(trimLine, "func ") && strings.Contains(trimLine, "(") && strings.Contains(trimLine, ")") {
+				inFunction = true
+				functionDepth = 0
+				otherCode = append(otherCode, line)
+				continue
+			}
+
+			// Track function depth
+			if inFunction {
+				if strings.Contains(trimLine, "{") {
+					functionDepth++
+				}
+				if strings.Contains(trimLine, "}") {
+					functionDepth--
+					if functionDepth <= 0 {
+						inFunction = false
+					}
+				}
+				otherCode = append(otherCode, line)
+				continue
+			}
+
+			// Non-function code goes to main
+			mainCode = append(mainCode, line)
+		}
+
+		// Rebuild the code
+		newCode := strings.Join(otherCode, "\n") + "\n\nfunc main() {\n"
+		for _, line := range mainCode {
+			if strings.TrimSpace(line) != "" &&
+				!strings.Contains(line, "package main") &&
+				!strings.Contains(line, "import") {
+				newCode += "\t" + line + "\n"
+			}
+		}
+		newCode += "}\n"
+
+		return newCode
+	}
+
+	return code
+}
+
+// CreateExecuteCodeTool creates a tool for code execution.
+// This tool can be used by the agent to execute code in various languages.
+func (a *CodeAgent) CreateExecuteCodeTool() tools.Tool {
+	baseTool, err := tools.NewBaseTool(
+		"execute_code",
+		"Execute code in the specified language",
+		map[string]tools.InputProperty{
+			"code": {
+				Type:        "string",
+				Description: "The code to execute",
+			},
+			"language": {
+				Type:        "string",
+				Description: "The programming language of the code (e.g., python, javascript, go)",
+				Nullable:    true,
+			},
+		},
+		"string",
+		func(args map[string]interface{}) (interface{}, error) {
+			code, ok := args["code"].(string)
+			if !ok {
+				return nil, fmt.Errorf("code must be a string")
+			}
+
+			// Default to Go if language is not specified
+			language := "go"
+			if langArg, ok := args["language"]; ok {
+				if lang, ok := langArg.(string); ok && lang != "" {
+					language = lang
+				}
+			}
+
+			// Execute the code
+			result, err := a.ExecuteCode(context.Background(), code, language)
+			if err != nil {
+				return nil, err
+			}
+
+			return result, nil
+		},
+	)
 
 	if err != nil {
-		return nil, err
+		// Handle error in a production scenario
+		panic(fmt.Sprintf("failed to create execute_code tool: %v", err))
 	}
 
-	agent := &CodeAgent{
-		BaseMultiStepAgent: baseAgent,
-		PythonExecutor:     pythonExecutor,
+	return baseTool
+}
+
+// AddTools adds tools to the agent's tool list.
+func (a *CodeAgent) AddTools(newTools []tools.Tool) {
+	// Add the execute_code tool
+	executeCodeTool := a.CreateExecuteCodeTool()
+	extendedTools := append([]tools.Tool{executeCodeTool}, newTools...)
+
+	// Add tools to the map
+	for _, tool := range extendedTools {
+		a.Tools[tool.Name()] = tool
+	}
+}
+
+// Create returns a new instance of the agent, ready for execution.
+// It implements the AgentFactory interface.
+func (a *CodeAgent) Create() (Agent, error) {
+	// Clone the agent with fresh state
+	newAgent, err := NewCodeAgent(
+		a.getToolList(),
+		a.Model,
+		a.PromptTemplates,
+		a.PlanningInterval,
+		a.MaxSteps,
+		a.Grammar,
+		a.getManagedAgentList(),
+		a.StepCallbacks,
+		a.Name,
+		a.Description,
+		a.ProvideRunSummary,
+		a.FinalAnswerChecks,
+		a.executor,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new code agent: %w", err)
 	}
 
-	// Send tools and state to the Python executor
-	if pythonExecutor != nil {
-		pythonExecutor.SendVariables(agent.State)
-		allTools := make(map[string]interface{})
+	// Wrap the agent to adapt to the Agent interface
+	return &agentWrapper{agent: newAgent}, nil
+}
 
-		// Add regular tools
-		for name, tool := range agent.Tools {
-			allTools[name] = tool
-		}
-
-		// Add managed agents
-		for name, managedAgent := range agent.ManagedAgents {
-			allTools[name] = managedAgent
-		}
-
-		pythonExecutor.SendTools(allTools)
+// getToolList converts the Tools map to a slice
+func (a *CodeAgent) getToolList() []tools.Tool {
+	toolList := make([]tools.Tool, 0, len(a.Tools))
+	for _, tool := range a.Tools {
+		toolList = append(toolList, tool)
 	}
+	return toolList
+}
 
-	return agent, nil
+// getManagedAgentList converts the ManagedAgents map to a slice
+func (a *CodeAgent) getManagedAgentList() []ManagedAgent {
+	agentList := make([]ManagedAgent, 0, len(a.ManagedAgents))
+	for _, agent := range a.ManagedAgents {
+		agentList = append(agentList, agent)
+	}
+	return agentList
+}
+
+// agentWrapper adapts a MultiStepAgent to the Agent interface
+type agentWrapper struct {
+	agent MultiStepAgent
+}
+
+// Run implements the Agent interface
+func (w *agentWrapper) Run(input string) (interface{}, error) {
+	return w.agent.Run(input, false, true, nil, nil, 0)
 }
 
 // InitializeSystemPrompt initializes the system prompt with tool descriptions
@@ -149,9 +335,9 @@ func (a *CodeAgent) InitializeSystemPrompt() string {
 
 // Step executes a single step of the agent
 func (a *CodeAgent) Step(memoryStep *memory.ActionStep) (interface{}, error) {
-	// If the Python executor is not set, return an error
-	if a.PythonExecutor == nil {
-		return nil, fmt.Errorf("Python executor not set")
+	// If the Go executor is not set, return an error
+	if a.executor == nil {
+		return nil, fmt.Errorf("Go executor not set")
 	}
 
 	// Get memory messages
@@ -176,9 +362,9 @@ func (a *CodeAgent) Step(memoryStep *memory.ActionStep) (interface{}, error) {
 	}
 
 	// Extract code blocks
-	codeBlocks := utils.ParseCodeBlobs(code, "python")
+	codeBlocks := utils.ParseCodeBlobs(code, "go")
 	if len(codeBlocks) == 0 {
-		return nil, utils.NewAgentParsingError("no Python code found in the model output", nil)
+		return nil, utils.NewAgentParsingError("no Go code found in the model output", nil)
 	}
 
 	// Get the code to execute
@@ -205,10 +391,13 @@ func (a *CodeAgent) Step(memoryStep *memory.ActionStep) (interface{}, error) {
 	}
 
 	// Execute the code
-	output, err := a.PythonExecutor.Execute(codeToExecute)
+	output, err := a.executor.Execute(context.Background(), codeToExecute, "go")
 	if err != nil {
 		// Provide error details to the agent
-		memoryStep.Error = utils.NewAgentToolExecutionError("error executing Python code", err)
+		memoryStep.Error = utils.NewAgentExecutionError(
+			fmt.Sprintf("error executing Go code: %v", err),
+			err,
+		)
 		memoryStep.Observations = fmt.Sprintf("Error: %v", err)
 		return nil, memoryStep.Error
 	}
@@ -231,9 +420,12 @@ func (a *CodeAgent) containsFinalAnswer(code string) bool {
 // extractFinalAnswer extracts the final answer from code
 func (a *CodeAgent) extractFinalAnswer(code string) (interface{}, error) {
 	// Execute the code to get the final answer
-	output, err := a.PythonExecutor.Execute(code)
+	output, err := a.executor.Execute(context.Background(), code, "go")
 	if err != nil {
-		return nil, utils.NewAgentToolExecutionError("error executing final answer code", err)
+		return nil, utils.NewAgentExecutionError(
+			fmt.Sprintf("error executing final answer code: %v", err),
+			err,
+		)
 	}
 
 	// If the code produces output, use that as the final answer
@@ -254,20 +446,26 @@ func (a *CodeAgent) extractFinalAnswer(code string) (interface{}, error) {
 	return code, nil
 }
 
-// Run overrides the base Run method to send variables to the Python executor
+// Run overrides the base Run method to send variables to the Go executor
 func (a *CodeAgent) Run(
 	task string,
 	stream bool,
 	reset bool,
-	images []interface{},
+	images []image.Image,
 	additionalArgs map[string]interface{},
 	maxSteps int,
 ) (interface{}, error) {
-	// If additionalArgs is provided, send them to the Python executor
-	if additionalArgs != nil && a.PythonExecutor != nil {
-		a.PythonExecutor.SendVariables(additionalArgs)
+	// If additionalArgs is provided, send them to the Go executor
+	if additionalArgs != nil && a.executor != nil {
+		a.executor.SendVariables(additionalArgs)
 	}
 
 	// Call the base Run method
-	return a.BaseMultiStepAgent.Run(task, stream, reset, nil, additionalArgs, maxSteps)
+	return a.BaseMultiStepAgent.Run(task, stream, reset, images, additionalArgs, maxSteps)
+}
+
+// MaximumContentLength returns the maximum content length supported by the model
+func (m ModelFunc) MaximumContentLength() int {
+	// Default to a safe value
+	return 8000
 }

@@ -1,347 +1,87 @@
-// Package models provides structures and interfaces for working with language models
+// Package models provides interfaces and implementations for working with language models
 package models
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
-	"regexp"
+	"image/png"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
-// MessageRole defines the possible roles in a conversation
+// MessageRole represents the role of a message in a conversation
 type MessageRole string
 
 const (
-	// MessageRoleSystem represents the system prompt
-	MessageRoleSystem MessageRole = "system"
-	// MessageRoleUser represents a user message
-	MessageRoleUser MessageRole = "user"
-	// MessageRoleAssistant represents an assistant message
-	MessageRoleAssistant MessageRole = "assistant"
-	// MessageRoleToolCall represents a tool call from the assistant
-	MessageRoleToolCall MessageRole = "tool-call"
-	// MessageRoleToolResponse represents a response from a tool
-	MessageRoleToolResponse MessageRole = "tool-response"
+	// RoleSystem is the role for system messages
+	RoleSystem MessageRole = "system"
+	// RoleUser is the role for user messages
+	RoleUser MessageRole = "user"
+	// RoleAssistant is the role for assistant messages
+	RoleAssistant MessageRole = "assistant"
+	// RoleTool is the role for tool messages
+	RoleTool MessageRole = "tool"
 )
 
 // Roles returns all possible message roles
 func (m MessageRole) Roles() []string {
 	return []string{
-		string(MessageRoleSystem),
-		string(MessageRoleUser),
-		string(MessageRoleAssistant),
-		string(MessageRoleToolCall),
-		string(MessageRoleToolResponse),
+		string(RoleSystem),
+		string(RoleUser),
+		string(RoleAssistant),
+		string(RoleTool),
 	}
 }
 
 // ToolRoleConversions maps special roles to standard roles for compatibility
 var ToolRoleConversions = map[MessageRole]MessageRole{
-	MessageRoleToolCall:     MessageRoleAssistant,
-	MessageRoleToolResponse: MessageRoleUser,
+	RoleTool: RoleAssistant,
 }
 
-// MessageContent represents different types of content in a message
+// MessageContent represents the content of a message
 type MessageContent struct {
-	Type  string      `json:"type"`
-	Text  string      `json:"text,omitempty"`
-	Image image.Image `json:"image,omitempty"`
-	// Could add more types like audio, etc.
+	Type      string      `json:"type"`
+	Text      string      `json:"text,omitempty"`
+	ImageURL  string      `json:"image_url,omitempty"`
+	ImageData image.Image `json:"-"`
 }
 
-// Message represents a chat message with role and content
+// Message represents a message in a conversation
 type Message struct {
-	Role    MessageRole      `json:"role"`
-	Content []MessageContent `json:"content"`
+	Role       MessageRole           `json:"role"`
+	Content    []MessageContent      `json:"content,omitempty"`
+	Name       string                `json:"name,omitempty"`
+	ToolCalls  []ChatMessageToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string                `json:"tool_call_id,omitempty"`
 }
 
-// ChatMessageToolCallDefinition defines the structure for a tool call
+// ChatMessageToolCallDefinition represents a tool call definition
 type ChatMessageToolCallDefinition struct {
-	Arguments   interface{} `json:"arguments"`
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
-// ChatMessageToolCall represents a call to a tool
+// ChatMessageToolCall represents a tool call
 type ChatMessageToolCall struct {
-	Function ChatMessageToolCallDefinition `json:"function"`
 	ID       string                        `json:"id"`
 	Type     string                        `json:"type"`
+	Function ChatMessageToolCallDefinition `json:"function"`
 }
 
-// ChatMessage represents a message from the model
+// ChatMessage represents a message from a chat model
 type ChatMessage struct {
-	Role      string                `json:"role"`
-	Content   string                `json:"content,omitempty"`
-	ToolCalls []ChatMessageToolCall `json:"tool_calls,omitempty"`
-	Raw       interface{}           `json:"raw,omitempty"`
+	Content      string                `json:"content"`
+	ToolCalls    []ChatMessageToolCall `json:"tool_calls,omitempty"`
+	Role         MessageRole           `json:"role"`
+	FunctionCall *struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function_call,omitempty"`
 }
 
-// ModelDumpJSON serializes the ChatMessage to JSON
-func (c *ChatMessage) ModelDumpJSON() (string, error) {
-	// Create a copy without Raw field to avoid circular references
-	type chatMessageCopy ChatMessage
-	copy := chatMessageCopy(*c)
-	copy.Raw = nil
-
-	data, err := json.Marshal(copy)
-	if err != nil {
-		return "", fmt.Errorf("error marshaling ChatMessage: %w", err)
-	}
-	return string(data), nil
-}
-
-// FromDict creates a ChatMessage from a dictionary representation
-func FromDict(data map[string]interface{}, raw interface{}) (*ChatMessage, error) {
-	role, ok := data["role"].(string)
-	if !ok {
-		return nil, fmt.Errorf("missing or invalid 'role' field")
-	}
-
-	var content string
-	if c, ok := data["content"].(string); ok {
-		content = c
-	}
-
-	var toolCalls []ChatMessageToolCall
-	if tc, ok := data["tool_calls"].([]interface{}); ok {
-		toolCalls = make([]ChatMessageToolCall, len(tc))
-		for i, call := range tc {
-			callMap, ok := call.(map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("invalid tool call format")
-			}
-
-			id, ok := callMap["id"].(string)
-			if !ok {
-				return nil, fmt.Errorf("missing or invalid 'id' field in tool call")
-			}
-
-			toolType, ok := callMap["type"].(string)
-			if !ok {
-				return nil, fmt.Errorf("missing or invalid 'type' field in tool call")
-			}
-
-			functionMap, ok := callMap["function"].(map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("missing or invalid 'function' field in tool call")
-			}
-
-			name, ok := functionMap["name"].(string)
-			if !ok {
-				return nil, fmt.Errorf("missing or invalid 'name' field in function")
-			}
-
-			description := ""
-			if desc, ok := functionMap["description"].(string); ok {
-				description = desc
-			}
-
-			toolCalls[i] = ChatMessageToolCall{
-				ID:   id,
-				Type: toolType,
-				Function: ChatMessageToolCallDefinition{
-					Name:        name,
-					Description: description,
-					Arguments:   functionMap["arguments"],
-				},
-			}
-		}
-	}
-
-	return &ChatMessage{
-		Role:      role,
-		Content:   content,
-		ToolCalls: toolCalls,
-		Raw:       raw,
-	}, nil
-}
-
-// ParseJSONIfNeeded attempts to parse a string as JSON if it's not already a map
-func ParseJSONIfNeeded(arguments interface{}) interface{} {
-	switch args := arguments.(type) {
-	case map[string]interface{}:
-		return args
-	case string:
-		var result map[string]interface{}
-		if err := json.Unmarshal([]byte(args), &result); err == nil {
-			return result
-		}
-		return args
-	default:
-		return arguments
-	}
-}
-
-// RemoveStopSequences removes stop sequences from the end of content
-func RemoveStopSequences(content string, stopSequences []string) string {
-	for _, stopSeq := range stopSequences {
-		if strings.HasSuffix(content, stopSeq) {
-			return content[:len(content)-len(stopSeq)]
-		}
-	}
-	return content
-}
-
-// GetCleanMessageList converts raw message list to a clean format
-func GetCleanMessageList(
-	messageList []map[string]interface{},
-	roleConversions map[MessageRole]MessageRole,
-	convertImagesToImageURLs bool,
-	flattenMessagesAsText bool,
-) ([]map[string]interface{}, error) {
-	var outputMessageList []map[string]interface{}
-
-	// Deep copy the message list to avoid modifying the original
-	for _, msg := range messageList {
-		role, ok := msg["role"].(string)
-		if !ok {
-			return nil, fmt.Errorf("missing or invalid 'role' field in message")
-		}
-
-		// Check if role is valid
-		foundValidRole := false
-		for _, validRole := range MessageRoleSystem.Roles() {
-			if role == validRole {
-				foundValidRole = true
-				break
-			}
-		}
-		if !foundValidRole {
-			return nil, fmt.Errorf("incorrect role %s, only %v are supported", role, MessageRoleSystem.Roles())
-		}
-
-		// Apply role conversions if needed
-		if convRole, ok := roleConversions[MessageRole(role)]; ok {
-			role = string(convRole)
-		}
-
-		// Process content
-		var content interface{}
-		if v, ok := msg["content"]; ok {
-			content = v
-		} else {
-			content = []map[string]interface{}{{"type": "text", "text": ""}}
-		}
-
-		// Handle content conversion
-		contentList, ok := content.([]map[string]interface{})
-		if ok {
-			for i, element := range contentList {
-				if elementType, ok := element["type"].(string); ok && elementType == "image" {
-					if flattenMessagesAsText {
-						return nil, fmt.Errorf("cannot use images with flattenMessagesAsText=true")
-					}
-
-					if convertImagesToImageURLs {
-						if img, ok := element["image"].(image.Image); ok {
-							// Convert image to URL
-							contentList[i] = map[string]interface{}{
-								"type": "image_url",
-								"image_url": map[string]interface{}{
-									"url": fmt.Sprintf("data:image/png;base64,%s", encodeImageBase64(img)),
-								},
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Find or append to the last message with the same role
-		if len(outputMessageList) > 0 && outputMessageList[len(outputMessageList)-1]["role"] == role {
-			lastMsg := outputMessageList[len(outputMessageList)-1]
-			lastContentList, ok := lastMsg["content"].([]map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("invalid content format in message")
-			}
-
-			if flattenMessagesAsText {
-				if contentText, ok := content.([]map[string]interface{})[0]["text"].(string); ok {
-					if lastText, ok := lastContentList[0]["text"].(string); ok {
-						lastContentList[0]["text"] = lastText + "\n" + contentText
-						outputMessageList[len(outputMessageList)-1]["content"] = lastContentList
-					}
-				}
-			} else {
-				if contentList, ok := content.([]map[string]interface{}); ok {
-					for _, el := range contentList {
-						if el["type"] == "text" && len(lastContentList) > 0 && lastContentList[len(lastContentList)-1]["type"] == "text" {
-							// Merge consecutive text messages
-							lastContentList[len(lastContentList)-1]["text"] = fmt.Sprintf("%s\n%s",
-								lastContentList[len(lastContentList)-1]["text"], el["text"])
-						} else {
-							lastContentList = append(lastContentList, el)
-						}
-					}
-					outputMessageList[len(outputMessageList)-1]["content"] = lastContentList
-				}
-			}
-		} else {
-			if flattenMessagesAsText {
-				if contentList, ok := content.([]map[string]interface{}); ok && len(contentList) > 0 {
-					if textContent, ok := contentList[0]["text"].(string); ok {
-						outputMessageList = append(outputMessageList, map[string]interface{}{
-							"role":    role,
-							"content": textContent,
-						})
-					}
-				}
-			} else {
-				outputMessageList = append(outputMessageList, map[string]interface{}{
-					"role":    role,
-					"content": content,
-				})
-			}
-		}
-	}
-
-	return outputMessageList, nil
-}
-
-// GetToolCallFromText extracts a tool call from text output
-func GetToolCallFromText(text string, toolNameKey, toolArgumentsKey string) (*ChatMessageToolCall, error) {
-	var toolCall map[string]interface{}
-	err := json.Unmarshal([]byte(text), &toolCall)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON from text: %w", err)
-	}
-
-	toolName, ok := toolCall[toolNameKey].(string)
-	if !ok {
-		return nil, fmt.Errorf("key %s not found in the generated tool call", toolNameKey)
-	}
-
-	toolArguments := toolCall[toolArgumentsKey]
-	toolArguments = ParseJSONIfNeeded(toolArguments)
-
-	return &ChatMessageToolCall{
-		ID:   uuid.NewString(),
-		Type: "function",
-		Function: ChatMessageToolCallDefinition{
-			Name:      toolName,
-			Arguments: toolArguments,
-		},
-	}, nil
-}
-
-// SupportsStopParameter checks if a model supports the stop parameter
-func SupportsStopParameter(modelID string) bool {
-	modelName := modelID
-	if parts := strings.Split(modelID, "/"); len(parts) > 1 {
-		modelName = parts[len(parts)-1]
-	}
-
-	// Models that don't support stop parameter
-	pattern := `^(o3[-\d]*|o4-mini[-\d]*)$`
-	matched, _ := regexp.MatchString(pattern, modelName)
-	return !matched
-}
-
-// Model is the interface that all language models must implement
+// Model defines the interface for language models
 type Model interface {
 	// Call processes the input messages and returns the model's response
 	Call(
@@ -359,9 +99,120 @@ type Model interface {
 	ToDict() map[string]interface{}
 }
 
+// RemoveStopSequences removes stop sequences from text
+func RemoveStopSequences(text string, stopSequences []string) string {
+	result := text
+	for _, seq := range stopSequences {
+		result = strings.ReplaceAll(result, seq, "")
+	}
+	return result
+}
+
+// GetCleanMessageList converts a slice of Message to a slice of maps
+func GetCleanMessageList(messages []Message) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(messages))
+	for i, msg := range messages {
+		result[i] = map[string]interface{}{
+			"role": msg.Role,
+		}
+
+		if len(msg.Content) > 0 {
+			if len(msg.Content) == 1 && msg.Content[0].Type == "text" {
+				result[i]["content"] = msg.Content[0].Text
+			} else {
+				content := make([]map[string]interface{}, len(msg.Content))
+				for j, c := range msg.Content {
+					contentItem := map[string]interface{}{
+						"type": c.Type,
+					}
+					if c.Type == "text" {
+						contentItem["text"] = c.Text
+					} else if c.Type == "image_url" {
+						contentItem["image_url"] = c.ImageURL
+					} else if c.Type == "image" && c.ImageData != nil {
+						contentItem["image_url"] = map[string]string{
+							"url": "data:image/png;base64," + encodeImageBase64(c.ImageData),
+						}
+					}
+					content[j] = contentItem
+				}
+				result[i]["content"] = content
+			}
+		}
+
+		if msg.Name != "" {
+			result[i]["name"] = msg.Name
+		}
+
+		if msg.ToolCallID != "" {
+			result[i]["tool_call_id"] = msg.ToolCallID
+		}
+
+		if len(msg.ToolCalls) > 0 {
+			toolCalls := make([]map[string]interface{}, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				toolCalls[j] = map[string]interface{}{
+					"id":   tc.ID,
+					"type": tc.Type,
+					"function": map[string]interface{}{
+						"name":      tc.Function.Name,
+						"arguments": tc.Function.Arguments,
+					},
+				}
+			}
+			result[i]["tool_calls"] = toolCalls
+		}
+	}
+	return result
+}
+
+// GetToolCallFromText extracts a tool call from text
+func GetToolCallFromText(text string) (*ChatMessageToolCall, error) {
+	// Parse the text as JSON
+	var toolCall ChatMessageToolCall
+	err := json.Unmarshal([]byte(text), &toolCall)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tool call from text: %w", err)
+	}
+	return &toolCall, nil
+}
+
+// ParseJSONIfNeeded parses a string as JSON if needed
+func ParseJSONIfNeeded(text string) (interface{}, error) {
+	// Try to parse as JSON
+	var result interface{}
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[") {
+		err := json.Unmarshal([]byte(text), &result)
+		if err == nil {
+			return result, nil
+		}
+	}
+	return text, nil
+}
+
+// SupportsStopParameter checks if a model supports the stop parameter
+func SupportsStopParameter(model Model) bool {
+	// This is a placeholder - in a real implementation,
+	// we would check the model's capabilities
+	return true
+}
+
 // encodeImageBase64 encodes an image to a base64 string
 func encodeImageBase64(img image.Image) string {
-	// This is a stub - would need a full implementation
-	fmt.Println(img.Bounds())
-	return "base64_encoded_string"
+	if img == nil {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
+
+	// Encode as PNG
+	err := png.Encode(encoder, img)
+	if err != nil {
+		return ""
+	}
+
+	encoder.Close()
+	return buf.String()
 }

@@ -1,150 +1,39 @@
-// Package utils provides common utility functions used throughout the library
+// Package utils provides utility functions for the smolagentsgo library.
+// It includes helper functions for name validation, JSON serialization, code parsing,
+// and comprehensive error types for agent operations.
 package utils
 
 import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 )
 
-// AgentError represents an error that occurred during agent execution
-type AgentError struct {
-	Message string
-	Cause   error
-}
-
-// Error returns the error message
-func (e *AgentError) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("%s: %v", e.Message, e.Cause)
-	}
-	return e.Message
-}
-
-// AgentGenerationError represents an error that occurred during generation
-type AgentGenerationError struct {
-	AgentError
-}
-
-// NewAgentGenerationError creates a new AgentGenerationError
-func NewAgentGenerationError(message string, cause error) *AgentGenerationError {
-	return &AgentGenerationError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// AgentExecutionError represents an error that occurred during execution
-type AgentExecutionError struct {
-	AgentError
-}
-
-// NewAgentExecutionError creates a new AgentExecutionError
-func NewAgentExecutionError(message string, cause error) *AgentExecutionError {
-	return &AgentExecutionError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// AgentParsingError represents an error that occurred during parsing
-type AgentParsingError struct {
-	AgentError
-}
-
-// NewAgentParsingError creates a new AgentParsingError
-func NewAgentParsingError(message string, cause error) *AgentParsingError {
-	return &AgentParsingError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// AgentToolCallError represents an error that occurred during a tool call
-type AgentToolCallError struct {
-	AgentError
-}
-
-// NewAgentToolCallError creates a new AgentToolCallError
-func NewAgentToolCallError(message string, cause error) *AgentToolCallError {
-	return &AgentToolCallError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// AgentToolExecutionError represents an error that occurred during tool execution
-type AgentToolExecutionError struct {
-	AgentError
-}
-
-// NewAgentToolExecutionError creates a new AgentToolExecutionError
-func NewAgentToolExecutionError(message string, cause error) *AgentToolExecutionError {
-	return &AgentToolExecutionError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// AgentMaxStepsError represents an error that occurred when the agent exceeds maximum steps
-type AgentMaxStepsError struct {
-	AgentError
-}
-
-// NewAgentMaxStepsError creates a new AgentMaxStepsError
-func NewAgentMaxStepsError(message string, cause error) *AgentMaxStepsError {
-	return &AgentMaxStepsError{
-		AgentError: AgentError{
-			Message: message,
-			Cause:   cause,
-		},
-	}
-}
-
-// IsValidName checks if a name is a valid identifier and not a reserved keyword
+// IsValidName checks if a name is a valid identifier.
+// The function validates that the name starts with a letter or underscore
+// and contains only letters, numbers, and underscores.
+// This is used to ensure tool and agent names meet Go identifier requirements.
 func IsValidName(name string) bool {
 	if name == "" {
 		return false
 	}
 
-	// Check for valid identifier name
-	matched, err := regexp.MatchString(`^[a-zA-Z_][a-zA-Z0-9_]*$`, name)
-	if err != nil || !matched {
-		return false
-	}
-
-	// Check for reserved keywords
-	for _, keyword := range []string{
-		"break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough",
-		"for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
-		"return", "select", "struct", "switch", "type", "var",
-	} {
-		if name == keyword {
-			return false
-		}
-	}
-
-	return true
+	// Must start with a letter or underscore, and contain only letters, numbers, and underscores
+	matched, _ := regexp.MatchString(`^[a-zA-Z_][a-zA-Z0-9_]*$`, name)
+	return matched
 }
 
-// MakeJSONSerializable ensures that a value is JSON serializable
+// MakeJSONSerializable converts a value to a JSON serializable form.
+// If the value is already serializable, it is returned as is.
+// Otherwise, it is converted to a string representation.
+// This is essential for ensuring that all data going into and out of agents
+// can be properly serialized for storage or transmission.
 func MakeJSONSerializable(v interface{}) interface{} {
 	if v == nil {
 		return nil
 	}
 
-	// Try to marshal to check if it's serializable
+	// Try to marshal and unmarshal to check if it's serializable
 	_, err := json.Marshal(v)
 	if err == nil {
 		return v
@@ -154,51 +43,193 @@ func MakeJSONSerializable(v interface{}) interface{} {
 	return fmt.Sprintf("%v", v)
 }
 
-// ParseCodeBlobs extracts code blobs from text
-func ParseCodeBlobs(text, language string) []string {
-	codeBlocks := []string{}
+// ParseCodeBlobs extracts code blocks from text.
+// It can target a specific language if provided, or extract any code blocks if language is empty.
+// This function is critical for code-based agents to parse the LLM's response.
+func ParseCodeBlobs(text string, language string) []string {
+	if language == "" {
+		language = ".*?"
+	}
 
-	// Match markdown code blocks with optional language spec
-	pattern := "```(?:" + language + ")?\\n([\\s\\S]*?)```"
+	// Look for code blocks like ```language\ncode\n```
+	pattern := fmt.Sprintf("```(?:%s)?\\n([\\s\\S]*?)\\n```", language)
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(text, -1)
 
-	for _, match := range matches {
+	result := make([]string, len(matches))
+	for i, match := range matches {
 		if len(match) > 1 {
-			codeBlocks = append(codeBlocks, strings.TrimSpace(match[1]))
+			result[i] = match[1]
 		}
 	}
 
-	return codeBlocks
+	return result
 }
 
-// TruncateContent truncates content to a maximum length
+// TruncateContent truncates a string to the specified length.
+// If the string is longer than maxLength, it is truncated and "..." is appended.
+// This is useful for limiting the size of logs or memory entries.
 func TruncateContent(content string, maxLength int) string {
 	if len(content) <= maxLength {
 		return content
 	}
 
-	halfLength := (maxLength - 5) / 2
-	return content[:halfLength] + "[...]" + content[len(content)-halfLength:]
+	return content[:maxLength] + "..."
 }
 
-// ParseJSONBlob extracts a JSON blob from text
-func ParseJSONBlob(text string) (map[string]interface{}, error) {
-	var result map[string]interface{}
+// ParseJSONBlob extracts and parses a JSON object from text.
+// It attempts to find a JSON object between curly braces and parse it.
+// This is useful for extracting structured data from LLM outputs.
+func ParseJSONBlob(text string) (interface{}, error) {
+	// Attempt to find JSON object in the text
+	re := regexp.MustCompile(`\{.*\}`)
+	match := re.FindString(text)
 
-	// Try to find a JSON blob in the text
-	start := strings.Index(text, "{")
-	end := strings.LastIndex(text, "}")
-
-	if start == -1 || end == -1 || end <= start {
-		return nil, fmt.Errorf("could not find a valid JSON blob in text")
+	if match == "" {
+		return nil, fmt.Errorf("no JSON object found in text")
 	}
 
-	jsonText := text[start : end+1]
-	err := json.Unmarshal([]byte(jsonText), &result)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing JSON blob: %w", err)
+	var result interface{}
+	if err := json.Unmarshal([]byte(match), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	return result, nil
+}
+
+// AgentError is the base interface for all agent errors.
+// All error types in the smolagentsgo library implement this interface,
+// allowing for consistent error handling and type checking.
+type AgentError interface {
+	error
+	Type() string
+}
+
+// baseAgentError provides a base implementation for agent errors.
+// It includes an error type, message, and optional cause for proper error chaining.
+type baseAgentError struct {
+	errorType string
+	message   string
+	cause     error
+}
+
+// Error returns the error message including the cause if present.
+// It implements the error interface.
+func (e *baseAgentError) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %s: %v", e.errorType, e.message, e.cause)
+	}
+	return fmt.Sprintf("%s: %s", e.errorType, e.message)
+}
+
+// Type returns the error type, allowing for easy categorization.
+func (e *baseAgentError) Type() string {
+	return e.errorType
+}
+
+// Unwrap returns the cause of the error, enabling error unwrapping with errors.Is and errors.As.
+func (e *baseAgentError) Unwrap() error {
+	return e.cause
+}
+
+// AgentGenerationError represents an error during agent output generation.
+// This typically occurs when the model fails to generate a valid response.
+type AgentGenerationError struct {
+	*baseAgentError
+}
+
+// NewAgentGenerationError creates a new AgentGenerationError with the given message and cause.
+func NewAgentGenerationError(message string, cause error) *AgentGenerationError {
+	return &AgentGenerationError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentGenerationError",
+			message:   message,
+			cause:     cause,
+		},
+	}
+}
+
+// AgentExecutionError represents an error during agent execution.
+// This is a general error for issues that occur while the agent is running.
+type AgentExecutionError struct {
+	*baseAgentError
+}
+
+// NewAgentExecutionError creates a new AgentExecutionError with the given message and cause.
+func NewAgentExecutionError(message string, cause error) *AgentExecutionError {
+	return &AgentExecutionError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentExecutionError",
+			message:   message,
+			cause:     cause,
+		},
+	}
+}
+
+// AgentParsingError represents an error during parsing agent output.
+// This occurs when the agent's output cannot be properly parsed.
+type AgentParsingError struct {
+	*baseAgentError
+}
+
+// NewAgentParsingError creates a new AgentParsingError with the given message and cause.
+func NewAgentParsingError(message string, cause error) *AgentParsingError {
+	return &AgentParsingError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentParsingError",
+			message:   message,
+			cause:     cause,
+		},
+	}
+}
+
+// AgentToolCallError represents an error during a tool call.
+// This occurs when there's an issue with the arguments or tool name.
+type AgentToolCallError struct {
+	*baseAgentError
+}
+
+// NewAgentToolCallError creates a new AgentToolCallError with the given message and cause.
+func NewAgentToolCallError(message string, cause error) *AgentToolCallError {
+	return &AgentToolCallError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentToolCallError",
+			message:   message,
+			cause:     cause,
+		},
+	}
+}
+
+// AgentToolExecutionError represents an error during tool execution.
+// This occurs when a tool fails to execute properly.
+type AgentToolExecutionError struct {
+	*baseAgentError
+}
+
+// NewAgentToolExecutionError creates a new AgentToolExecutionError with the given message and cause.
+func NewAgentToolExecutionError(message string, cause error) *AgentToolExecutionError {
+	return &AgentToolExecutionError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentToolExecutionError",
+			message:   message,
+			cause:     cause,
+		},
+	}
+}
+
+// AgentMaxStepsError represents an error when the agent exceeds the maximum steps.
+// This is usually a stopping condition rather than a true error.
+type AgentMaxStepsError struct {
+	*baseAgentError
+}
+
+// NewAgentMaxStepsError creates a new AgentMaxStepsError with the given message and cause.
+func NewAgentMaxStepsError(message string, cause error) *AgentMaxStepsError {
+	return &AgentMaxStepsError{
+		baseAgentError: &baseAgentError{
+			errorType: "AgentMaxStepsError",
+			message:   message,
+			cause:     cause,
+		},
+	}
 }

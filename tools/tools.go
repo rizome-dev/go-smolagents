@@ -1,16 +1,16 @@
-// Package tools provides interfaces and implementations for agent tools
+// Package tools provides interfaces and implementations for agent tools.
+// It defines the base Tool interface and provides concrete implementations
+// that agents can use to interact with external systems and resources.
 package tools
 
 import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"regexp"
-
-	"github.com/rizome-dev/smolagentsgo/agent_types"
 )
 
-// AuthorizedTypes defines the allowed types for tool inputs
+// AuthorizedTypes defines the allowed types for tool inputs.
+// These types control what data can be passed to tools.
 var AuthorizedTypes = []string{
 	"string",
 	"boolean",
@@ -24,7 +24,8 @@ var AuthorizedTypes = []string{
 	"null",
 }
 
-// ConversionDict maps Go types to JSON schema types
+// ConversionDict maps Go types to JSON schema types.
+// This is used when generating tool schemas.
 var ConversionDict = map[string]string{
 	"string": "string",
 	"bool":   "boolean",
@@ -32,14 +33,16 @@ var ConversionDict = map[string]string{
 	"float":  "number",
 }
 
-// InputProperty defines a property for a tool input
+// InputProperty defines a property for a tool input.
+// Each property has a type, description, and optional nullable flag.
 type InputProperty struct {
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	Nullable    bool   `json:"nullable,omitempty"`
 }
 
-// Tool defines the interface for all tools that can be used by agents
+// Tool defines the interface for all tools that can be used by agents.
+// Any type implementing this interface can be used as a tool by agents.
 type Tool interface {
 	// Name returns the name of the tool
 	Name() string
@@ -63,7 +66,8 @@ type Tool interface {
 	Call(args map[string]interface{}, sanitizeInputsOutputs bool) (interface{}, error)
 }
 
-// BaseTool provides a base implementation for tools
+// BaseTool provides a base implementation for tools.
+// It handles common tool functionality like validation and execution.
 type BaseTool struct {
 	name        string
 	description string
@@ -73,24 +77,53 @@ type BaseTool struct {
 	forward     func(args map[string]interface{}) (interface{}, error)
 }
 
-// NewBaseTool creates a new BaseTool
+// NewBaseTool creates a new BaseTool with the provided parameters.
+// It validates the tool name, description, inputs, and forward function.
 func NewBaseTool(
 	name string,
 	description string,
 	inputs map[string]InputProperty,
 	outputType string,
 	forward func(args map[string]interface{}) (interface{}, error),
-) *BaseTool {
-	if err := validateToolName(name); err != nil {
-		panic(err)
+) (*BaseTool, error) {
+	if name == "" {
+		return nil, fmt.Errorf("tool name cannot be empty")
 	}
 
-	if err := validateToolInputs(inputs); err != nil {
-		panic(err)
+	if description == "" {
+		return nil, fmt.Errorf("tool description cannot be empty")
 	}
 
-	if err := validateToolOutputType(outputType); err != nil {
-		panic(err)
+	if forward == nil {
+		return nil, fmt.Errorf("forward function cannot be nil")
+	}
+
+	// Validate output type
+	if outputType == "" {
+		outputType = "any"
+	}
+
+	// Validate input properties
+	for name, prop := range inputs {
+		if prop.Type == "" {
+			return nil, fmt.Errorf("type cannot be empty for input %s", name)
+		}
+
+		validType := false
+		for _, t := range AuthorizedTypes {
+			if t == prop.Type {
+				validType = true
+				break
+			}
+		}
+
+		if !validType {
+			return nil, fmt.Errorf("invalid type %s for input %s", prop.Type, name)
+		}
+
+		if prop.Description == "" {
+			return nil, fmt.Errorf("description cannot be empty for input %s", name)
+		}
 	}
 
 	return &BaseTool{
@@ -98,227 +131,295 @@ func NewBaseTool(
 		description: description,
 		inputs:      inputs,
 		outputType:  outputType,
+		initialized: false,
 		forward:     forward,
-	}
+	}, nil
 }
 
-// Name returns the name of the tool
+// Name returns the name of the tool.
 func (t *BaseTool) Name() string {
 	return t.name
 }
 
-// Description returns the description of the tool
+// Description returns the description of the tool.
 func (t *BaseTool) Description() string {
 	return t.description
 }
 
-// Inputs returns the inputs schema for the tool
+// Inputs returns the inputs schema for the tool.
 func (t *BaseTool) Inputs() map[string]InputProperty {
 	return t.inputs
 }
 
-// OutputType returns the output type of the tool
+// OutputType returns the output type of the tool.
 func (t *BaseTool) OutputType() string {
 	return t.outputType
 }
 
-// Setup performs any necessary initialization
+// Setup performs any necessary initialization.
+// For BaseTool, this just marks the tool as initialized.
 func (t *BaseTool) Setup() error {
 	t.initialized = true
 	return nil
 }
 
-// Forward executes the tool with the given arguments
+// Forward executes the tool with the given arguments.
+// It delegates to the provided forward function.
 func (t *BaseTool) Forward(args map[string]interface{}) (interface{}, error) {
 	return t.forward(args)
 }
 
-// Call is a convenience method that combines setup and forward
+// Call is a convenience method that combines setup and forward.
+// It handles initialization, input validation, and output sanitization.
 func (t *BaseTool) Call(args map[string]interface{}, sanitizeInputsOutputs bool) (interface{}, error) {
 	if !t.initialized {
 		if err := t.Setup(); err != nil {
-			return nil, fmt.Errorf("failed to initialize tool: %w", err)
+			return nil, fmt.Errorf("failed to setup tool: %w", err)
 		}
 	}
 
-	// Handle the case where args might be a map or a struct
-	argsMap := args
-	if reflect.TypeOf(args).Kind() != reflect.Map {
-		// Convert struct to map
-		data, err := json.Marshal(args)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal args: %w", err)
-		}
-
-		if err := json.Unmarshal(data, &argsMap); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal args to map: %w", err)
-		}
-	}
-
+	// Validate inputs if sanitization is enabled
 	if sanitizeInputsOutputs {
-		// Process arguments
-		for k, v := range argsMap {
-			if at, ok := v.(agent_types.AgentType); ok {
-				argsMap[k] = at.ToRaw()
-			}
+		if err := t.validateInputs(args); err != nil {
+			return nil, err
 		}
 	}
 
-	output, err := t.Forward(argsMap)
+	// Call the forward function
+	result, err := t.Forward(args)
 	if err != nil {
 		return nil, err
 	}
 
+	// Sanitize output if needed
 	if sanitizeInputsOutputs {
-		output = agent_types.HandleAgentOutputTypes(output, t.outputType)
+		result = sanitizeOutput(result, t.outputType)
 	}
 
-	return output, nil
+	return result, nil
 }
 
-// FinalAnswerTool is a special tool that signals the agent has reached a final answer
+// validateInputs checks if the provided arguments match the expected inputs schema.
+// It validates presence, type, and nullability of each argument.
+func (t *BaseTool) validateInputs(args map[string]interface{}) error {
+	// Check for missing required inputs
+	for name, prop := range t.inputs {
+		if _, ok := args[name]; !ok && !prop.Nullable {
+			return fmt.Errorf("missing required input %s", name)
+		}
+	}
+
+	// Check for unexpected inputs
+	for name := range args {
+		if _, ok := t.inputs[name]; !ok {
+			return fmt.Errorf("unexpected input %s", name)
+		}
+	}
+
+	// Validate input types
+	for name, value := range args {
+		prop, ok := t.inputs[name]
+		if !ok {
+			continue
+		}
+
+		if value == nil {
+			if !prop.Nullable {
+				return fmt.Errorf("input %s cannot be null", name)
+			}
+			continue
+		}
+
+		// Check type
+		switch prop.Type {
+		case "string":
+			_, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("input %s must be a string", name)
+			}
+		case "boolean":
+			_, ok := value.(bool)
+			if !ok {
+				return fmt.Errorf("input %s must be a boolean", name)
+			}
+		case "integer":
+			switch v := value.(type) {
+			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+				// Valid integer type
+			case float32, float64:
+				// Check if the float is actually an integer
+				f := reflect.ValueOf(v).Float()
+				if float64(int(f)) != f {
+					return fmt.Errorf("input %s must be an integer", name)
+				}
+			default:
+				return fmt.Errorf("input %s must be an integer", name)
+			}
+		case "number":
+			switch value.(type) {
+			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+				// Valid number type
+			default:
+				return fmt.Errorf("input %s must be a number", name)
+			}
+		case "image":
+			switch value.(type) {
+			case interface{ GetType() string }, string: // Allow image or URL string
+				// Valid image type
+			default:
+				return fmt.Errorf("input %s must be an image", name)
+			}
+		case "audio":
+			switch value.(type) {
+			case interface{ GetType() string }, string: // Allow audio or URL string
+				// Valid audio type
+			default:
+				return fmt.Errorf("input %s must be an audio", name)
+			}
+		case "array":
+			v := reflect.ValueOf(value)
+			if v.Kind() != reflect.Slice && v.Kind() != reflect.Array {
+				return fmt.Errorf("input %s must be an array", name)
+			}
+		case "object":
+			v := reflect.ValueOf(value)
+			if v.Kind() != reflect.Map && v.Kind() != reflect.Struct {
+				return fmt.Errorf("input %s must be an object", name)
+			}
+		case "any":
+			// Any type is allowed
+		}
+	}
+
+	return nil
+}
+
+// sanitizeOutput ensures the output matches the expected type.
+// It converts the output to the appropriate type if necessary.
+func sanitizeOutput(output interface{}, outputType string) interface{} {
+	if output == nil {
+		return nil
+	}
+
+	switch outputType {
+	case "string":
+		if s, ok := output.(string); ok {
+			return s
+		}
+		return fmt.Sprintf("%v", output)
+	case "boolean":
+		if b, ok := output.(bool); ok {
+			return b
+		}
+		return false
+	case "integer":
+		switch v := output.(type) {
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return v
+		case float32, float64:
+			return int(reflect.ValueOf(v).Float())
+		default:
+			return 0
+		}
+	case "number":
+		switch v := output.(type) {
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+			return v
+		default:
+			return 0.0
+		}
+	case "array":
+		v := reflect.ValueOf(output)
+		if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+			return output
+		}
+		return []interface{}{output}
+	case "object":
+		v := reflect.ValueOf(output)
+		if v.Kind() == reflect.Map || v.Kind() == reflect.Struct {
+			return output
+		}
+		return map[string]interface{}{"value": output}
+	default:
+		return output
+	}
+}
+
+// FinalAnswerTool is a special tool that provides the final answer from an agent.
+// This is used to terminate agent execution with a result.
 type FinalAnswerTool struct {
 	*BaseTool
 }
 
-// NewFinalAnswerTool creates a new FinalAnswerTool
-func NewFinalAnswerTool() *FinalAnswerTool {
-	tool := &FinalAnswerTool{
-		BaseTool: NewBaseTool(
-			"final_answer",
-			"Use this to provide your final answer to the user's query.",
-			map[string]InputProperty{
-				"answer": {
-					Type:        "string",
-					Description: "The final answer to provide to the user.",
-				},
-			},
-			"string",
-			func(args map[string]interface{}) (interface{}, error) {
-				answer, ok := args["answer"]
-				if !ok {
-					return nil, fmt.Errorf("missing required 'answer' argument")
-				}
-				return answer, nil
-			},
-		),
-	}
-
-	return tool
-}
-
-// Validation helper functions
-
-// validateToolName checks if a tool name is valid
-func validateToolName(name string) error {
-	if name == "" {
-		return fmt.Errorf("tool name cannot be empty")
-	}
-
-	// Check for valid identifier name
-	matched, err := regexp.MatchString(`^[a-zA-Z_][a-zA-Z0-9_]*$`, name)
-	if err != nil {
-		return fmt.Errorf("error checking tool name validity: %w", err)
-	}
-
-	if !matched {
-		return fmt.Errorf("invalid tool name '%s': must be a valid identifier", name)
-	}
-
-	// Check for reserved keywords
-	for _, keyword := range []string{
-		"break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough",
-		"for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range",
-		"return", "select", "struct", "switch", "type", "var",
-	} {
-		if name == keyword {
-			return fmt.Errorf("invalid tool name '%s': cannot be a reserved keyword", name)
-		}
-	}
-
-	return nil
-}
-
-// validateToolInputs checks if tool inputs are valid
-func validateToolInputs(inputs map[string]InputProperty) error {
-	if len(inputs) == 0 {
-		return fmt.Errorf("tool inputs cannot be empty")
-	}
-
-	for name, input := range inputs {
-		if input.Type == "" || input.Description == "" {
-			return fmt.Errorf("input '%s' must have both 'type' and 'description'", name)
-		}
-
-		typeValid := false
-		for _, validType := range AuthorizedTypes {
-			if input.Type == validType {
-				typeValid = true
-				break
-			}
-		}
-
-		if !typeValid {
-			return fmt.Errorf("input '%s': type '%s' is not an authorized value, should be one of %v", name, input.Type, AuthorizedTypes)
-		}
-	}
-
-	return nil
-}
-
-// validateToolOutputType checks if a tool output type is valid
-func validateToolOutputType(outputType string) error {
-	if outputType == "" {
-		return fmt.Errorf("tool output type cannot be empty")
-	}
-
-	typeValid := false
-	for _, validType := range AuthorizedTypes {
-		if outputType == validType {
-			typeValid = true
-			break
-		}
-	}
-
-	if !typeValid {
-		return fmt.Errorf("output type '%s' is not an authorized value, should be one of %v", outputType, AuthorizedTypes)
-	}
-
-	return nil
-}
-
-// GetToolJSONSchema returns the JSON schema for a tool
-func GetToolJSONSchema(tool Tool) map[string]interface{} {
-	properties := make(map[string]interface{})
-	required := []string{}
-
-	for key, value := range tool.Inputs() {
-		prop := map[string]interface{}{
-			"type":        value.Type,
-			"description": value.Description,
-		}
-
-		if value.Type == "any" {
-			prop["type"] = "string"
-		}
-
-		if !value.Nullable {
-			required = append(required, key)
-		}
-
-		properties[key] = prop
-	}
-
-	return map[string]interface{}{
-		"type": "function",
-		"function": map[string]interface{}{
-			"name":        tool.Name(),
-			"description": tool.Description(),
-			"parameters": map[string]interface{}{
-				"type":       "object",
-				"properties": properties,
-				"required":   required,
+// NewFinalAnswerTool creates a new FinalAnswerTool.
+// This tool takes an answer parameter and returns it as the final answer.
+func NewFinalAnswerTool() (*FinalAnswerTool, error) {
+	baseTool, err := NewBaseTool(
+		"final_answer",
+		"Use this tool to provide the final answer to the task.",
+		map[string]InputProperty{
+			"answer": {
+				Type:        "any",
+				Description: "The final answer to the task.",
 			},
 		},
+		"string",
+		func(args map[string]interface{}) (interface{}, error) {
+			answer, ok := args["answer"]
+			if !ok {
+				return nil, fmt.Errorf("missing required input 'answer'")
+			}
+			return answer, nil
+		},
+	)
+
+	if err != nil {
+		return nil, err
 	}
+
+	return &FinalAnswerTool{
+		BaseTool: baseTool,
+	}, nil
+}
+
+// GetToolJSONSchema generates a JSON schema for a tool.
+// This is used to create a schema that can be provided to language models.
+func GetToolJSONSchema(tool Tool) (string, error) {
+	schema := map[string]interface{}{
+		"name":        tool.Name(),
+		"description": tool.Description(),
+		"parameters": map[string]interface{}{
+			"type": "object",
+			"properties": func() map[string]interface{} {
+				props := make(map[string]interface{})
+				for name, prop := range tool.Inputs() {
+					propSchema := map[string]interface{}{
+						"type":        prop.Type,
+						"description": prop.Description,
+					}
+					if prop.Nullable {
+						propSchema["nullable"] = true
+					}
+					props[name] = propSchema
+				}
+				return props
+			}(),
+			"required": func() []string {
+				var required []string
+				for name, prop := range tool.Inputs() {
+					if !prop.Nullable {
+						required = append(required, name)
+					}
+				}
+				return required
+			}(),
+		},
+	}
+
+	jsonSchema, err := json.MarshalIndent(schema, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate JSON schema: %w", err)
+	}
+
+	return string(jsonSchema), nil
 }
