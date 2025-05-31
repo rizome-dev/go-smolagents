@@ -876,7 +876,7 @@ func runResearch(cmd *cobra.Command, args []string) error {
 func init() {
 	// Root command flags
 	rootCmd.PersistentFlags().StringVar(&modelType, "model-type", "openrouter", "Model type (openrouter, openai, hf, litellm, bedrock, vllm, mlx)")
-	rootCmd.PersistentFlags().StringVar(&modelID, "model", "deepseek/deepseek-r1-0528-qwen3-8b", "Model ID")
+	rootCmd.PersistentFlags().StringVar(&modelID, "model", "google/gemini-2.5-pro-preview", "Model ID")
 	rootCmd.PersistentFlags().StringVar(&apiKey, "api-key", "", "API key for the model provider")
 	rootCmd.PersistentFlags().StringVar(&baseURL, "base-url", "", "Base URL for the model API")
 	rootCmd.PersistentFlags().BoolVar(&interactive, "interactive", false, "Run in interactive mode")
@@ -1015,10 +1015,10 @@ func createModel() (models.Model, error) {
 
 	// Auto-adjust model ID for certain model types if using old defaults
 	adjustedModelID := modelID
-	if modelType == "hf" && (modelID == "gpt-3.5-turbo" || modelID == "deepseek/deepseek-r1-0528-qwen3-8b") {
+	if modelType == "hf" && (modelID == "gpt-3.5-turbo" || modelID == "deepseek/deepseek-r1-0528-qwen3-8b" || modelID == "google/gemini-2.5-pro-preview") {
 		// Switch to a good HuggingFace chat model
 		adjustedModelID = "meta-llama/Llama-2-7b-chat-hf"
-	} else if modelType == "openai" && modelID == "deepseek/deepseek-r1-0528-qwen3-8b" {
+	} else if modelType == "openai" && (modelID == "deepseek/deepseek-r1-0528-qwen3-8b" || modelID == "google/gemini-2.5-pro-preview") {
 		// Switch to OpenAI model if user explicitly chose openai type
 		adjustedModelID = "gpt-3.5-turbo"
 	}

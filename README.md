@@ -11,6 +11,8 @@ built by: [rizome labs](https://rizome.dev)
 
 contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
+**warning**: this project is an internal WIP library in use by Rizome Labs, and should not, until v1, be used, in full, in prod environments. we will keep this repo updated until that time to describe the ongoing development.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
