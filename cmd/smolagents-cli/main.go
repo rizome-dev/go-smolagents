@@ -1505,7 +1505,7 @@ func NewSupervisorAgent(model models.Model, config SupervisorConfig) (*Superviso
 		default_tools.NewWebSearchTool(),
 		default_tools.NewWikipediaSearchTool(),
 		default_tools.NewVisitWebpageTool(),
-		default_tools.NewFinalAnswerTool(),
+		// Note: final_answer tool is automatically added by NewToolCallingAgent
 	}
 
 	supervisorPrompt := `You are an advanced research supervisor agent responsible for coordinating a team of specialized research workers.
@@ -1599,7 +1599,7 @@ func NewTaskScheduler(ctx context.Context) *TaskScheduler {
 func NewQualityMonitor(model models.Model, ctx context.Context) *QualityMonitor {
 	qualityTools := []tools.Tool{
 		default_tools.NewWebSearchTool(),
-		default_tools.NewFinalAnswerTool(),
+		// Note: final_answer tool is automatically added by NewToolCallingAgent
 	}
 
 	qualityPrompt := `You are a research quality assessment agent. Your role is to evaluate research results for:
