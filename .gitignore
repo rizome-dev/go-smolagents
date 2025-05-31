@@ -5,8 +5,9 @@ bin/
 *.dll
 *.so
 *.dylib
-smolagents-cli
-research_agent
+/smolagents-cli
+/research_agent
+internal/examples/research_agent/research_agent
 
 # Test binary, built with `go test -c`
 *.test
