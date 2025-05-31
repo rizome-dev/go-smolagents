@@ -1,6 +1,15 @@
-# SmolagentsGo
+# smolagentsgo
 
-A production-ready Go implementation of the smolagents AI agent framework. Build sophisticated AI agents with tool calling, code execution, web search, and multi-agent coordination.
+[![GoDoc](https://pkg.go.dev/badge/github.com/rizome-dev/smolagentsgo)](https://pkg.go.dev/github.com/rizome-dev/smolagentsgo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rizome-dev/smolagentsgo)](https://goreportcard.com/report/github.com/rizome-dev/smolagentsgo)
+
+```shell
+go get github.com/rizome-dev/smolagentsgo
+```
+
+built by: [rizome labs](https://rizome.dev)
+
+contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
 ## 🚀 Quick Start
 
