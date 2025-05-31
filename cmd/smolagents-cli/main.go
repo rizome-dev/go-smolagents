@@ -124,7 +124,7 @@ type ProjectReport struct {
 	Sources     []string
 }
 
-// Enhanced Research Agent types (from enhanced_research_agent example)
+// Advanced Research Agent types (from research_agent example)
 
 // Task represents a research task with enhanced metadata
 type Task struct {
@@ -1494,7 +1494,7 @@ func listResources(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Enhanced Research Agent Functions (from enhanced_research_agent example)
+// Advanced Research Agent Functions (from research_agent example)
 
 // NewSupervisorAgent creates a new supervisor agent with default configuration
 func NewSupervisorAgent(model models.Model, config SupervisorConfig) (*SupervisorAgent, error) {

@@ -33,8 +33,7 @@ go get -u ./...
 # Run examples
 cd internal/examples/calculator && go run main.go  # Requires HF_API_TOKEN env var
 cd internal/examples/websearch && go run main.go  # Requires HF_API_TOKEN env var
-cd internal/examples/research_agent && go run main.go  # Basic research agent
-cd internal/examples/enhanced_research_agent && go run main.go  # Advanced agentic research system
+cd internal/examples/research_agent && go run main.go  # Advanced agentic research system with 2024-2025 best practices
 ```
 
 ## Architecture Overview
