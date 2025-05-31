@@ -30,7 +30,7 @@ func NewHubClient(token string, options map[string]interface{}) *HubClient {
 		UserAgent: "smolagents-go/1.18.0",
 		Timeout:   30 * time.Second,
 	}
-	
+
 	if options != nil {
 		if baseURL, ok := options["base_url"].(string); ok {
 			client.BaseURL = baseURL
@@ -45,11 +45,11 @@ func NewHubClient(token string, options map[string]interface{}) *HubClient {
 			client.Timeout = timeout
 		}
 	}
-	
+
 	client.httpClient = &http.Client{
 		Timeout: client.Timeout,
 	}
-	
+
 	return client
 }
 
@@ -75,12 +75,12 @@ type ToolMetadata struct {
 // HubTool represents a tool loaded from the HuggingFace Hub
 type HubTool struct {
 	*BaseTool
-	Metadata    *ToolMetadata `json:"metadata"`
-	HubID       string        `json:"hub_id"`
-	Revision    string        `json:"revision"`
-	LocalPath   string        `json:"local_path"`
-	client      *HubClient
-	executable  string        // Path to executable for the tool
+	Metadata   *ToolMetadata `json:"metadata"`
+	HubID      string        `json:"hub_id"`
+	Revision   string        `json:"revision"`
+	LocalPath  string        `json:"local_path"`
+	client     *HubClient
+	executable string // Path to executable for the tool
 }
 
 // LoadToolFromHub loads a tool from the HuggingFace Hub
@@ -88,7 +88,7 @@ func LoadToolFromHub(hubID string, client *HubClient, options map[string]interfa
 	if client == nil {
 		client = NewHubClient("", nil)
 	}
-	
+
 	// Parse hub ID (format: "namespace/tool-name" or "namespace/tool-name@revision")
 	parts := strings.Split(hubID, "@")
 	toolPath := parts[0]
@@ -96,13 +96,13 @@ func LoadToolFromHub(hubID string, client *HubClient, options map[string]interfa
 	if len(parts) > 1 {
 		revision = parts[1]
 	}
-	
+
 	// Fetch tool metadata
 	metadata, err := client.fetchToolMetadata(toolPath, revision)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tool metadata: %w", err)
 	}
-	
+
 	// Create base tool from metadata
 	baseTool := NewBaseTool(
 		metadata.Name,
@@ -110,7 +110,7 @@ func LoadToolFromHub(hubID string, client *HubClient, options map[string]interfa
 		metadata.Inputs,
 		metadata.OutputType,
 	)
-	
+
 	// Create hub tool
 	hubTool := &HubTool{
 		BaseTool: baseTool,
@@ -119,30 +119,30 @@ func LoadToolFromHub(hubID string, client *HubClient, options map[string]interfa
 		Revision: revision,
 		client:   client,
 	}
-	
+
 	// Download and prepare the tool
 	if err := hubTool.downloadAndPrepare(options); err != nil {
 		return nil, fmt.Errorf("failed to prepare tool: %w", err)
 	}
-	
+
 	// Set the forward function
 	hubTool.ForwardFunc = hubTool.forward
-	
+
 	return hubTool, nil
 }
 
 // fetchToolMetadata fetches tool metadata from the Hub
 func (hc *HubClient) fetchToolMetadata(toolPath, revision string) (*ToolMetadata, error) {
 	// Construct API URL for tool metadata
-	url := fmt.Sprintf("%s/api/tools/%s/tree/%s", 
+	url := fmt.Sprintf("%s/api/tools/%s/tree/%s",
 		strings.TrimSuffix(hc.BaseURL, "/"), toolPath, revision)
-	
+
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	req.Header.Set("User-Agent", hc.UserAgent)
 	if hc.Token != "" {
@@ -151,29 +151,29 @@ func (hc *HubClient) fetchToolMetadata(toolPath, revision string) (*ToolMetadata
 	for key, value := range hc.Headers {
 		req.Header.Set(key, value)
 	}
-	
+
 	// Make request
 	resp, err := hc.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("tool not found: %s", toolPath)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	// For now, create metadata from a simplified structure
 	// In a real implementation, this would parse the actual Hub API response
 	metadata := &ToolMetadata{
@@ -187,7 +187,7 @@ func (hc *HubClient) fetchToolMetadata(toolPath, revision string) (*ToolMetadata
 		License:     "unknown",
 		Config:      make(map[string]interface{}),
 	}
-	
+
 	// Try to parse tool configuration if available
 	var config map[string]interface{}
 	if err := json.Unmarshal(body, &config); err == nil {
@@ -208,20 +208,20 @@ func (hc *HubClient) fetchToolMetadata(toolPath, revision string) (*ToolMetadata
 			}
 		}
 	}
-	
+
 	return metadata, nil
 }
 
 // parseInputsFromHub converts Hub input definitions to ToolInput format
 func parseInputsFromHub(hubInputs map[string]interface{}) map[string]*ToolInput {
 	inputs := make(map[string]*ToolInput)
-	
+
 	for name, inputDef := range hubInputs {
 		if def, ok := inputDef.(map[string]interface{}); ok {
 			inputType := "string"
 			description := ""
 			nullable := true
-			
+
 			if t, ok := def["type"].(string); ok {
 				inputType = t
 			}
@@ -231,7 +231,7 @@ func parseInputsFromHub(hubInputs map[string]interface{}) map[string]*ToolInput 
 			if n, ok := def["nullable"].(bool); ok {
 				nullable = n
 			}
-			
+
 			inputs[name] = &ToolInput{
 				Type:        inputType,
 				Description: description,
@@ -239,7 +239,7 @@ func parseInputsFromHub(hubInputs map[string]interface{}) map[string]*ToolInput 
 			}
 		}
 	}
-	
+
 	return inputs
 }
 
@@ -251,11 +251,11 @@ func (ht *HubTool) downloadAndPrepare(options map[string]interface{}) error {
 	// 2. Set up the execution environment
 	// 3. Compile/prepare the tool for execution
 	// 4. Validate the tool configuration
-	
+
 	// Simulate tool preparation
 	ht.LocalPath = fmt.Sprintf("/tmp/hub-tools/%s", strings.ReplaceAll(ht.HubID, "/", "_"))
 	ht.executable = filepath.Join(ht.LocalPath, "tool")
-	
+
 	return nil
 }
 
@@ -263,7 +263,7 @@ func (ht *HubTool) downloadAndPrepare(options map[string]interface{}) error {
 func (ht *HubTool) forward(args ...interface{}) (interface{}, error) {
 	// Convert args to input map
 	inputs := make(map[string]interface{})
-	
+
 	// If we have a single map argument, use it directly
 	if len(args) == 1 {
 		if inputMap, ok := args[0].(map[string]interface{}); ok {
@@ -287,7 +287,7 @@ func (ht *HubTool) forward(args ...interface{}) (interface{}, error) {
 			}
 		}
 	}
-	
+
 	// Execute the tool
 	return ht.executeHubTool(inputs)
 }
@@ -300,19 +300,19 @@ func (ht *HubTool) executeHubTool(inputs map[string]interface{}) (interface{}, e
 	// 2. Execute the tool (could be Python script, binary, API call, etc.)
 	// 3. Parse and return the output
 	// 4. Handle errors appropriately
-	
+
 	inputJSON, _ := json.Marshal(inputs)
-	
-	return fmt.Sprintf("Hub tool '%s' executed with inputs: %s\n\n(This is a placeholder - real implementation would execute the actual tool from %s)", 
+
+	return fmt.Sprintf("Hub tool '%s' executed with inputs: %s\n\n(This is a placeholder - real implementation would execute the actual tool from %s)",
 		ht.Name, string(inputJSON), ht.HubID), nil
 }
 
 // SearchTools searches for tools on the HuggingFace Hub
 func (hc *HubClient) SearchTools(query string, options map[string]interface{}) ([]*ToolMetadata, error) {
 	// Construct search URL
-	url := fmt.Sprintf("%s/api/tools?search=%s", 
+	url := fmt.Sprintf("%s/api/tools?search=%s",
 		strings.TrimSuffix(hc.BaseURL, "/"), query)
-	
+
 	// Add optional parameters
 	if options != nil {
 		if limit, ok := options["limit"].(int); ok {
@@ -325,42 +325,42 @@ func (hc *HubClient) SearchTools(query string, options map[string]interface{}) (
 			url += fmt.Sprintf("&author=%s", author)
 		}
 	}
-	
+
 	// Create request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	req.Header.Set("User-Agent", hc.UserAgent)
 	if hc.Token != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", hc.Token))
 	}
-	
+
 	// Make request
 	resp, err := hc.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	var searchResults struct {
 		Tools []*ToolMetadata `json:"tools"`
 		Total int             `json:"total"`
 	}
-	
+
 	if err := json.Unmarshal(body, &searchResults); err != nil {
 		// If parsing fails, return mock results for now
 		return []*ToolMetadata{
@@ -375,7 +375,7 @@ func (hc *HubClient) SearchTools(query string, options map[string]interface{}) (
 			},
 		}, nil
 	}
-	
+
 	return searchResults.Tools, nil
 }
 
@@ -403,7 +403,7 @@ func NewHubToolRegistry(client *HubClient) *HubToolRegistry {
 	if client == nil {
 		client = NewHubClient("", nil)
 	}
-	
+
 	return &HubToolRegistry{
 		tools:  make(map[string]*HubTool),
 		client: client,
@@ -416,7 +416,7 @@ func (htr *HubToolRegistry) LoadTool(hubID string, options map[string]interface{
 	if err != nil {
 		return nil, err
 	}
-	
+
 	htr.tools[tool.Name] = tool
 	return tool, nil
 }
@@ -451,13 +451,13 @@ func (htr *HubToolRegistry) UpdateTool(name string, options map[string]interface
 	if !exists {
 		return fmt.Errorf("tool %s not found in registry", name)
 	}
-	
+
 	// Reload the tool
 	newTool, err := LoadToolFromHub(tool.HubID, htr.client, options)
 	if err != nil {
 		return fmt.Errorf("failed to update tool: %w", err)
 	}
-	
+
 	htr.tools[name] = newTool
 	return nil
 }

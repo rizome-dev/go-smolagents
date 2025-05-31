@@ -62,7 +62,7 @@ var CodeAgentResponseFormat = &ResponseFormat{
 					"title":       "Thought",
 				},
 				"code": map[string]interface{}{
-					"type":        "string", 
+					"type":        "string",
 					"description": "Valid Python code snippet implementing the thought.",
 					"title":       "Code",
 				},
@@ -91,11 +91,11 @@ type ChatMessageToolCall struct {
 
 // ChatMessage represents a message in the conversation
 type ChatMessage struct {
-	Role       string                  `json:"role"`
-	Content    *string                 `json:"content,omitempty"`
-	ToolCalls  []ChatMessageToolCall   `json:"tool_calls,omitempty"`
-	Raw        interface{}             `json:"-"` // Stores raw output from API
-	TokenUsage *monitoring.TokenUsage  `json:"token_usage,omitempty"`
+	Role       string                 `json:"role"`
+	Content    *string                `json:"content,omitempty"`
+	ToolCalls  []ChatMessageToolCall  `json:"tool_calls,omitempty"`
+	Raw        interface{}            `json:"-"` // Stores raw output from API
+	TokenUsage *monitoring.TokenUsage `json:"token_usage,omitempty"`
 }
 
 // NewChatMessage creates a new chat message
@@ -110,10 +110,10 @@ func NewChatMessage(role string, content string) *ChatMessage {
 func (cm *ChatMessage) ModelDumpJSON() ([]byte, error) {
 	// Create a copy without the Raw field for serialization
 	copy := struct {
-		Role       string                  `json:"role"`
-		Content    *string                 `json:"content,omitempty"`
-		ToolCalls  []ChatMessageToolCall   `json:"tool_calls,omitempty"`
-		TokenUsage *monitoring.TokenUsage  `json:"token_usage,omitempty"`
+		Role       string                 `json:"role"`
+		Content    *string                `json:"content,omitempty"`
+		ToolCalls  []ChatMessageToolCall  `json:"tool_calls,omitempty"`
+		TokenUsage *monitoring.TokenUsage `json:"token_usage,omitempty"`
 	}{
 		Role:       cm.Role,
 		Content:    cm.Content,
@@ -128,11 +128,11 @@ func (cm *ChatMessage) FromDict(data map[string]interface{}, raw interface{}, to
 	if role, ok := data["role"].(string); ok {
 		cm.Role = role
 	}
-	
+
 	if content, ok := data["content"].(string); ok {
 		cm.Content = &content
 	}
-	
+
 	if toolCallsData, ok := data["tool_calls"].([]interface{}); ok {
 		cm.ToolCalls = make([]ChatMessageToolCall, len(toolCallsData))
 		for i, tcData := range toolCallsData {
@@ -159,7 +159,7 @@ func (cm *ChatMessage) FromDict(data map[string]interface{}, raw interface{}, to
 			}
 		}
 	}
-	
+
 	cm.Raw = raw
 	cm.TokenUsage = tokenUsage
 	return nil
@@ -170,11 +170,11 @@ func (cm *ChatMessage) ToDict() map[string]interface{} {
 	result := map[string]interface{}{
 		"role": cm.Role,
 	}
-	
+
 	if cm.Content != nil {
 		result["content"] = *cm.Content
 	}
-	
+
 	if len(cm.ToolCalls) > 0 {
 		toolCalls := make([]map[string]interface{}, len(cm.ToolCalls))
 		for i, tc := range cm.ToolCalls {
@@ -185,7 +185,7 @@ func (cm *ChatMessage) ToDict() map[string]interface{} {
 			if tc.Function.Description != nil {
 				function["description"] = *tc.Function.Description
 			}
-			
+
 			toolCalls[i] = map[string]interface{}{
 				"id":       tc.ID,
 				"type":     tc.Type,
@@ -194,7 +194,7 @@ func (cm *ChatMessage) ToDict() map[string]interface{} {
 		}
 		result["tool_calls"] = toolCalls
 	}
-	
+
 	if cm.TokenUsage != nil {
 		result["token_usage"] = map[string]interface{}{
 			"input_tokens":  cm.TokenUsage.InputTokens,
@@ -202,35 +202,35 @@ func (cm *ChatMessage) ToDict() map[string]interface{} {
 			"total_tokens":  cm.TokenUsage.TotalTokens,
 		}
 	}
-	
+
 	return result
 }
 
 // ChatMessageStreamDelta represents a streaming delta for chat messages
 type ChatMessageStreamDelta struct {
-	Content    *string                 `json:"content,omitempty"`
-	ToolCalls  []ChatMessageToolCall   `json:"tool_calls,omitempty"`
-	TokenUsage *monitoring.TokenUsage  `json:"token_usage,omitempty"`
+	Content    *string                `json:"content,omitempty"`
+	ToolCalls  []ChatMessageToolCall  `json:"tool_calls,omitempty"`
+	TokenUsage *monitoring.TokenUsage `json:"token_usage,omitempty"`
 }
 
 // GenerateOptions represents options for model generation
 type GenerateOptions struct {
-	StopSequences      []string                   `json:"stop_sequences,omitempty"`
-	ResponseFormat     *ResponseFormat            `json:"response_format,omitempty"`     // Enhanced structured format
-	ResponseFormatRaw  map[string]interface{}     `json:"response_format_raw,omitempty"` // Raw format for backwards compatibility
-	ToolsToCallFrom    []tools.Tool               `json:"tools_to_call_from,omitempty"`
-	Grammar            map[string]string          `json:"grammar,omitempty"`
-	MaxTokens          *int                       `json:"max_tokens,omitempty"`
-	Temperature        *float64                   `json:"temperature,omitempty"`
-	TopP               *float64                   `json:"top_p,omitempty"`
-	TopK               *int                       `json:"top_k,omitempty"`
-	FrequencyPenalty   *float64                   `json:"frequency_penalty,omitempty"`
-	PresencePenalty    *float64                   `json:"presence_penalty,omitempty"`
-	Seed               *int                       `json:"seed,omitempty"`
-	ValidateOutput     bool                       `json:"validate_output"`              // Whether to validate structured output
-	RetryOnFailure     bool                       `json:"retry_on_failure"`             // Whether to retry on validation failure
-	MaxRetries         int                        `json:"max_retries"`                  // Maximum number of retries
-	CustomParams       map[string]interface{}     `json:"custom_params,omitempty"`
+	StopSequences     []string               `json:"stop_sequences,omitempty"`
+	ResponseFormat    *ResponseFormat        `json:"response_format,omitempty"`     // Enhanced structured format
+	ResponseFormatRaw map[string]interface{} `json:"response_format_raw,omitempty"` // Raw format for backwards compatibility
+	ToolsToCallFrom   []tools.Tool           `json:"tools_to_call_from,omitempty"`
+	Grammar           map[string]string      `json:"grammar,omitempty"`
+	MaxTokens         *int                   `json:"max_tokens,omitempty"`
+	Temperature       *float64               `json:"temperature,omitempty"`
+	TopP              *float64               `json:"top_p,omitempty"`
+	TopK              *int                   `json:"top_k,omitempty"`
+	FrequencyPenalty  *float64               `json:"frequency_penalty,omitempty"`
+	PresencePenalty   *float64               `json:"presence_penalty,omitempty"`
+	Seed              *int                   `json:"seed,omitempty"`
+	ValidateOutput    bool                   `json:"validate_output"`  // Whether to validate structured output
+	RetryOnFailure    bool                   `json:"retry_on_failure"` // Whether to retry on validation failure
+	MaxRetries        int                    `json:"max_retries"`      // Maximum number of retries
+	CustomParams      map[string]interface{} `json:"custom_params,omitempty"`
 }
 
 // Model represents the main interface for all LLM models
@@ -240,25 +240,25 @@ type Model interface {
 		messages []interface{}, // Can be dict or ChatMessage
 		options *GenerateOptions,
 	) (*ChatMessage, error)
-	
+
 	// GenerateStream generates a streaming response (if supported)
 	GenerateStream(
 		messages []interface{},
 		options *GenerateOptions,
 	) (<-chan *ChatMessageStreamDelta, error)
-	
+
 	// ParseToolCalls parses tool calls from message content
 	ParseToolCalls(message *ChatMessage) (*ChatMessage, error)
-	
+
 	// ToDict converts the model to a dictionary representation
 	ToDict() map[string]interface{}
-	
+
 	// GetModelID returns the model identifier
 	GetModelID() string
-	
+
 	// SupportsStreaming returns true if the model supports streaming
 	SupportsStreaming() bool
-	
+
 	// Close cleans up model resources
 	Close() error
 }
@@ -266,27 +266,27 @@ type Model interface {
 // BaseModel provides common functionality for model implementations
 type BaseModel struct {
 	FlattenMessagesAsText bool   `json:"flatten_messages_as_text"`
-	ToolNameKey          string `json:"tool_name_key"`
-	ToolArgumentsKey     string `json:"tool_arguments_key"`
-	ModelID              string `json:"model_id"`
-	
+	ToolNameKey           string `json:"tool_name_key"`
+	ToolArgumentsKey      string `json:"tool_arguments_key"`
+	ModelID               string `json:"model_id"`
+
 	// Deprecated token counting properties (maintained for compatibility)
 	LastInputTokenCount  *int `json:"_last_input_token_count,omitempty"`
 	LastOutputTokenCount *int `json:"_last_output_token_count,omitempty"`
-	
+
 	CustomParams map[string]interface{} `json:"custom_params,omitempty"`
 }
 
 // NewBaseModel creates a new base model
 func NewBaseModel(modelID string, options map[string]interface{}) *BaseModel {
 	base := &BaseModel{
-		ModelID:              modelID,
+		ModelID:               modelID,
 		FlattenMessagesAsText: false,
-		ToolNameKey:          "name",
-		ToolArgumentsKey:     "arguments",
-		CustomParams:         make(map[string]interface{}),
+		ToolNameKey:           "name",
+		ToolArgumentsKey:      "arguments",
+		CustomParams:          make(map[string]interface{}),
 	}
-	
+
 	if options != nil {
 		if flatten, ok := options["flatten_messages_as_text"].(bool); ok {
 			base.FlattenMessagesAsText = flatten
@@ -297,7 +297,7 @@ func NewBaseModel(modelID string, options map[string]interface{}) *BaseModel {
 		if toolArgsKey, ok := options["tool_arguments_key"].(string); ok {
 			base.ToolArgumentsKey = toolArgsKey
 		}
-		
+
 		// Store any additional custom parameters
 		for k, v := range options {
 			if k != "flatten_messages_as_text" && k != "tool_name_key" && k != "tool_arguments_key" {
@@ -305,7 +305,7 @@ func NewBaseModel(modelID string, options map[string]interface{}) *BaseModel {
 			}
 		}
 	}
-	
+
 	return base
 }
 
@@ -329,20 +329,20 @@ func (bm *BaseModel) ParseToolCalls(message *ChatMessage) (*ChatMessage, error) 
 	if message.Content == nil || len(message.ToolCalls) > 0 {
 		return message, nil // Already has tool calls or no content
 	}
-	
+
 	// Parse tool calls from content using regex patterns
 	content := *message.Content
-	
+
 	// Pattern to match Action: tool_name and Action Input: {...}
 	actionPattern := regexp.MustCompile(`(?i)action:\s*([^\n]+)`)
 	inputPattern := regexp.MustCompile(`(?i)action\s+input:\s*({.*?})`)
-	
+
 	actionMatches := actionPattern.FindStringSubmatch(content)
 	inputMatches := inputPattern.FindStringSubmatch(content)
-	
+
 	if len(actionMatches) > 1 {
 		toolName := strings.TrimSpace(actionMatches[1])
-		
+
 		var arguments interface{}
 		if len(inputMatches) > 1 {
 			// Try to parse as JSON
@@ -355,7 +355,7 @@ func (bm *BaseModel) ParseToolCalls(message *ChatMessage) (*ChatMessage, error) 
 		} else {
 			arguments = map[string]interface{}{}
 		}
-		
+
 		toolCall := ChatMessageToolCall{
 			ID:   fmt.Sprintf("call_%d", len(message.ToolCalls)),
 			Type: "function",
@@ -364,33 +364,33 @@ func (bm *BaseModel) ParseToolCalls(message *ChatMessage) (*ChatMessage, error) 
 				Arguments: arguments,
 			},
 		}
-		
+
 		message.ToolCalls = append(message.ToolCalls, toolCall)
 	}
-	
+
 	return message, nil
 }
 
 // ToDict implements Model
 func (bm *BaseModel) ToDict() map[string]interface{} {
 	result := map[string]interface{}{
-		"model_id":                  bm.ModelID,
-		"flatten_messages_as_text":  bm.FlattenMessagesAsText,
-		"tool_name_key":             bm.ToolNameKey,
-		"tool_arguments_key":        bm.ToolArgumentsKey,
+		"model_id":                 bm.ModelID,
+		"flatten_messages_as_text": bm.FlattenMessagesAsText,
+		"tool_name_key":            bm.ToolNameKey,
+		"tool_arguments_key":       bm.ToolArgumentsKey,
 	}
-	
+
 	if bm.LastInputTokenCount != nil {
 		result["_last_input_token_count"] = *bm.LastInputTokenCount
 	}
 	if bm.LastOutputTokenCount != nil {
 		result["_last_output_token_count"] = *bm.LastOutputTokenCount
 	}
-	
+
 	for k, v := range bm.CustomParams {
 		result[k] = v
 	}
-	
+
 	return result
 }
 
@@ -401,12 +401,12 @@ func (bm *BaseModel) PrepareCompletionKwargs(
 	priorityParams map[string]interface{},
 ) map[string]interface{} {
 	kwargs := make(map[string]interface{})
-	
+
 	// Start with default parameters
 	for k, v := range defaultParams {
 		kwargs[k] = v
 	}
-	
+
 	// Add parameters from options
 	if options != nil {
 		if options.MaxTokens != nil {
@@ -433,25 +433,25 @@ func (bm *BaseModel) PrepareCompletionKwargs(
 		if len(options.StopSequences) > 0 {
 			kwargs["stop"] = options.StopSequences
 		}
-		
+
 		// Handle response format - prefer structured format over raw
 		if options.ResponseFormat != nil {
 			kwargs["response_format"] = bm.ConvertResponseFormat(options.ResponseFormat)
 		} else if options.ResponseFormatRaw != nil {
 			kwargs["response_format"] = options.ResponseFormatRaw
 		}
-		
+
 		// Add custom parameters
 		for k, v := range options.CustomParams {
 			kwargs[k] = v
 		}
 	}
-	
+
 	// Priority parameters override everything
 	for k, v := range priorityParams {
 		kwargs[k] = v
 	}
-	
+
 	return kwargs
 }
 
@@ -460,11 +460,11 @@ func (bm *BaseModel) ConvertResponseFormat(format *ResponseFormat) map[string]in
 	if format == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"type": format.Type,
 	}
-	
+
 	if format.JSONSchema != nil {
 		result["json_schema"] = map[string]interface{}{
 			"name":        format.JSONSchema.Name,
@@ -475,11 +475,11 @@ func (bm *BaseModel) ConvertResponseFormat(format *ResponseFormat) map[string]in
 	} else if format.Schema != nil {
 		result["schema"] = format.Schema
 	}
-	
+
 	if format.Strict {
 		result["strict"] = format.Strict
 	}
-	
+
 	return result
 }
 
@@ -492,14 +492,14 @@ func (bm *BaseModel) GenerateWithStructuredOutput(
 	if options == nil {
 		options = &GenerateOptions{}
 	}
-	
+
 	// Set default retry options
 	if options.MaxRetries == 0 {
 		options.MaxRetries = 3
 	}
-	
+
 	var lastError error
-	
+
 	for attempt := 0; attempt <= options.MaxRetries; attempt++ {
 		// Generate the response
 		response, err := model.Generate(messages, options)
@@ -510,7 +510,7 @@ func (bm *BaseModel) GenerateWithStructuredOutput(
 			}
 			continue
 		}
-		
+
 		// Parse structured output if format is specified
 		if options.ResponseFormat != nil {
 			structuredOutput, err := ParseStructuredOutput(*response.Content, options.ResponseFormat)
@@ -528,7 +528,7 @@ func (bm *BaseModel) GenerateWithStructuredOutput(
 				}
 				continue
 			}
-			
+
 			// Validate output if required
 			if options.ValidateOutput && !structuredOutput.Valid {
 				lastError = fmt.Errorf("output validation failed: %v", structuredOutput.Errors)
@@ -537,30 +537,30 @@ func (bm *BaseModel) GenerateWithStructuredOutput(
 				}
 				continue
 			}
-			
+
 			// Add response metadata
 			structuredOutput.Metadata["attempt"] = attempt + 1
 			structuredOutput.Metadata["token_usage"] = response.TokenUsage
 			structuredOutput.Metadata["raw_response"] = response.Raw
-			
+
 			return structuredOutput, nil
 		}
-		
+
 		// No structured format - return as basic structured output
 		return &StructuredOutput{
-			Content:  *response.Content,
-			Raw:      *response.Content,
-			Format:   TextFormat,
-			Valid:    true,
-			Errors:   []string{},
+			Content: *response.Content,
+			Raw:     *response.Content,
+			Format:  TextFormat,
+			Valid:   true,
+			Errors:  []string{},
 			Metadata: map[string]interface{}{
-				"attempt":     attempt + 1,
-				"token_usage": response.TokenUsage,
+				"attempt":      attempt + 1,
+				"token_usage":  response.TokenUsage,
 				"raw_response": response.Raw,
 			},
 		}, nil
 	}
-	
+
 	return nil, fmt.Errorf("failed after %d attempts, last error: %w", options.MaxRetries+1, lastError)
 }
 
@@ -572,7 +572,7 @@ func (bm *BaseModel) PrepareStructuredPrompt(
 	if format == nil {
 		return basePrompt
 	}
-	
+
 	return GenerateStructuredPrompt(basePrompt, format)
 }
 
@@ -594,24 +594,24 @@ func GetToolJSONSchema(tool tools.Tool) map[string]interface{} {
 	inputs := tool.GetInputs()
 	properties := make(map[string]interface{})
 	required := []string{}
-	
+
 	for key, input := range inputs {
 		prop := map[string]interface{}{
 			"type":        input.Type,
 			"description": input.Description,
 		}
-		
+
 		if input.Type == "any" {
 			prop["type"] = "string"
 		}
-		
+
 		properties[key] = prop
-		
+
 		if !input.Nullable {
 			required = append(required, key)
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"type": "function",
 		"function": map[string]interface{}{
@@ -644,10 +644,10 @@ func GetCleanMessageList(
 	flattenMessagesAsText bool,
 ) ([]map[string]interface{}, error) {
 	var result []map[string]interface{}
-	
+
 	for _, msg := range messages {
 		var msgMap map[string]interface{}
-		
+
 		switch m := msg.(type) {
 		case *ChatMessage:
 			msgMap = m.ToDict()
@@ -656,7 +656,7 @@ func GetCleanMessageList(
 		default:
 			return nil, fmt.Errorf("unsupported message type: %T", msg)
 		}
-		
+
 		// Apply role conversions
 		if roleConversions != nil {
 			if role, ok := msgMap["role"].(string); ok {
@@ -665,7 +665,7 @@ func GetCleanMessageList(
 				}
 			}
 		}
-		
+
 		// Merge consecutive messages with the same role
 		if len(result) > 0 && result[len(result)-1]["role"] == msgMap["role"] {
 			// Merge content
@@ -676,7 +676,7 @@ func GetCleanMessageList(
 			result = append(result, msgMap)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -684,13 +684,13 @@ func GetCleanMessageList(
 func SupportsStopParameter(modelID string) bool {
 	// Some models don't support stop parameters (e.g., reasoning models)
 	reasoningModels := []string{"o1", "o1-preview", "o1-mini", "o3", "o3-mini"}
-	
+
 	for _, reasoningModel := range reasoningModels {
 		if strings.Contains(strings.ToLower(modelID), reasoningModel) {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -699,13 +699,13 @@ type ModelType string
 
 const (
 	ModelTypeInferenceClient ModelType = "inference_client"
-	ModelTypeOpenAIServer   ModelType = "openai_server"
-	ModelTypeAzureOpenAI    ModelType = "azure_openai"
-	ModelTypeLiteLLM        ModelType = "litellm"
-	ModelTypeBedrockModel   ModelType = "bedrock"
-	ModelTypeMLX            ModelType = "mlx"
-	ModelTypeVLLM           ModelType = "vllm"
-	ModelTypeTransformers   ModelType = "transformers"
+	ModelTypeOpenAIServer    ModelType = "openai_server"
+	ModelTypeAzureOpenAI     ModelType = "azure_openai"
+	ModelTypeLiteLLM         ModelType = "litellm"
+	ModelTypeBedrockModel    ModelType = "bedrock"
+	ModelTypeMLX             ModelType = "mlx"
+	ModelTypeVLLM            ModelType = "vllm"
+	ModelTypeTransformers    ModelType = "transformers"
 )
 
 // CreateModel creates a model of the specified type
@@ -750,7 +750,7 @@ func AutoDetectModelType(modelID string) ModelType {
 	if SupportsVLLMModel(modelID) {
 		return ModelTypeVLLM
 	}
-	
+
 	// Default to inference client for HuggingFace models
 	return ModelTypeInferenceClient
 }
@@ -760,7 +760,7 @@ func ValidateModelConfiguration(modelType ModelType, modelID string, options map
 	if modelID == "" {
 		return fmt.Errorf("model ID cannot be empty")
 	}
-	
+
 	switch modelType {
 	case ModelTypeInferenceClient:
 		if options != nil {
@@ -787,17 +787,17 @@ func ValidateModelConfiguration(modelType ModelType, modelID string, options map
 			return fmt.Errorf("model %s is not supported by vLLM", modelID)
 		}
 	}
-	
+
 	return nil
 }
 
 // GetModelInfo returns information about a model
 func GetModelInfo(modelType ModelType, modelID string) map[string]interface{} {
 	info := map[string]interface{}{
-		"model_id": modelID,
+		"model_id":   modelID,
 		"model_type": string(modelType),
 	}
-	
+
 	switch modelType {
 	case ModelTypeBedrockModel:
 		if defaults := GetBedrockModelDefaults(modelID); defaults != nil {
@@ -808,6 +808,6 @@ func GetModelInfo(modelType ModelType, modelID string) map[string]interface{} {
 	case ModelTypeVLLM:
 		info["defaults"] = GetVLLMModelDefaults()
 	}
-	
+
 	return info
 }

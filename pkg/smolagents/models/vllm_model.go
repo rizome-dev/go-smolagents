@@ -18,25 +18,25 @@ import (
 // VLLMModel represents a model using vLLM for fast inference
 type VLLMModel struct {
 	*BaseModel
-	ModelPath           string                 `json:"model_path"`
-	TensorParallelSize  int                    `json:"tensor_parallel_size"`
-	GPUMemoryUtilization float64              `json:"gpu_memory_utilization"`
-	MaxModelLen         int                    `json:"max_model_len"`
-	Quantization        string                 `json:"quantization"`
-	DType               string                 `json:"dtype"`
-	Seed                int                    `json:"seed"`
-	TrustRemoteCode     bool                   `json:"trust_remote_code"`
-	RevisionID          string                 `json:"revision_id"`
-	ModelKwargs         map[string]interface{} `json:"model_kwargs"`
-	SamplingParams      map[string]interface{} `json:"sampling_params"`
-	pythonPath          string                 // Path to Python executable with vLLM
-	tempDir             string                 // Temporary directory for scripts
+	ModelPath            string                 `json:"model_path"`
+	TensorParallelSize   int                    `json:"tensor_parallel_size"`
+	GPUMemoryUtilization float64                `json:"gpu_memory_utilization"`
+	MaxModelLen          int                    `json:"max_model_len"`
+	Quantization         string                 `json:"quantization"`
+	DType                string                 `json:"dtype"`
+	Seed                 int                    `json:"seed"`
+	TrustRemoteCode      bool                   `json:"trust_remote_code"`
+	RevisionID           string                 `json:"revision_id"`
+	ModelKwargs          map[string]interface{} `json:"model_kwargs"`
+	SamplingParams       map[string]interface{} `json:"sampling_params"`
+	pythonPath           string                 // Path to Python executable with vLLM
+	tempDir              string                 // Temporary directory for scripts
 }
 
 // NewVLLMModel creates a new vLLM model
 func NewVLLMModel(modelID string, options map[string]interface{}) *VLLMModel {
 	base := NewBaseModel(modelID, options)
-	
+
 	model := &VLLMModel{
 		BaseModel:            base,
 		ModelPath:            modelID, // Default to model ID as path
@@ -50,7 +50,7 @@ func NewVLLMModel(modelID string, options map[string]interface{}) *VLLMModel {
 		ModelKwargs:          make(map[string]interface{}),
 		SamplingParams:       make(map[string]interface{}),
 	}
-	
+
 	if options != nil {
 		if modelPath, ok := options["model_path"].(string); ok {
 			model.ModelPath = modelPath
@@ -86,14 +86,14 @@ func NewVLLMModel(modelID string, options map[string]interface{}) *VLLMModel {
 			model.SamplingParams = samplingParams
 		}
 	}
-	
+
 	// Initialize vLLM paths
 	model.initializeVLLMPaths()
-	
+
 	// Create temporary directory
 	tempDir, _ := os.MkdirTemp("", "vllm-model-*")
 	model.tempDir = tempDir
-	
+
 	return model
 }
 
@@ -107,7 +107,7 @@ func (vm *VLLMModel) initializeVLLMPaths() {
 		"python3", // In PATH
 		"python",  // Fallback
 	}
-	
+
 	for _, path := range pythonPaths {
 		if _, err := exec.LookPath(path); err == nil {
 			// Test if vLLM is available
@@ -126,22 +126,22 @@ func (vm *VLLMModel) Generate(messages []interface{}, options *GenerateOptions) 
 	if !vm.isVLLMAvailable() {
 		return nil, fmt.Errorf("vLLM is not available. Please install it with: pip install vllm")
 	}
-	
+
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, true) // Flatten for vLLM
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare the prompt
 	prompt, err := vm.formatMessagesAsPrompt(cleanMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format messages: %w", err)
 	}
-	
+
 	// Prepare sampling parameters
 	samplingParams := vm.prepareSamplingParams(options)
-	
+
 	// Handle tools if provided
 	var tools []map[string]interface{}
 	if options != nil && len(options.ToolsToCallFrom) > 0 {
@@ -150,13 +150,13 @@ func (vm *VLLMModel) Generate(messages []interface{}, options *GenerateOptions) 
 			tools[i] = GetToolJSONSchema(tool)
 		}
 	}
-	
+
 	// Generate response using vLLM
 	response, tokenCounts, err := vm.generateWithVLLM(prompt, samplingParams, tools, options)
 	if err != nil {
 		return nil, fmt.Errorf("vLLM generation failed: %w", err)
 	}
-	
+
 	// Create ChatMessage
 	message := &ChatMessage{
 		Role:       "assistant",
@@ -168,7 +168,7 @@ func (vm *VLLMModel) Generate(messages []interface{}, options *GenerateOptions) 
 			"sampling_params": samplingParams,
 		},
 	}
-	
+
 	return message, nil
 }
 
@@ -178,35 +178,35 @@ func (vm *VLLMModel) GenerateStream(messages []interface{}, options *GenerateOpt
 	if !vm.isVLLMAvailable() {
 		return nil, fmt.Errorf("vLLM is not available. Please install it with: pip install vllm")
 	}
-	
+
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, true) // Flatten for vLLM
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare the prompt
 	prompt, err := vm.formatMessagesAsPrompt(cleanMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format messages: %w", err)
 	}
-	
+
 	// Create the stream channel
 	streamChan := make(chan *ChatMessageStreamDelta, 100)
-	
+
 	// Start streaming in a goroutine
 	go func() {
 		defer close(streamChan)
-		
+
 		samplingParams := vm.prepareSamplingParams(options)
-		
+
 		err := vm.generateStreamWithVLLM(prompt, samplingParams, streamChan)
 		if err != nil {
 			// In a real implementation, you'd send an error delta
 			return
 		}
 	}()
-	
+
 	return streamChan, nil
 }
 
@@ -248,11 +248,11 @@ func (vm *VLLMModel) isVLLMAvailable() bool {
 // formatMessagesAsPrompt converts messages to a prompt string for vLLM
 func (vm *VLLMModel) formatMessagesAsPrompt(messages []map[string]interface{}) (string, error) {
 	var promptParts []string
-	
+
 	for _, msg := range messages {
 		role, _ := msg["role"].(string)
 		content, _ := msg["content"].(string)
-		
+
 		switch role {
 		case "system":
 			promptParts = append(promptParts, fmt.Sprintf("<|system|>\n%s<|end|>", content))
@@ -264,22 +264,22 @@ func (vm *VLLMModel) formatMessagesAsPrompt(messages []map[string]interface{}) (
 			promptParts = append(promptParts, fmt.Sprintf("<%s>\n%s<|end|>", role, content))
 		}
 	}
-	
+
 	// Add final assistant prompt
 	promptParts = append(promptParts, "<|assistant|>")
-	
+
 	return strings.Join(promptParts, "\n"), nil
 }
 
 // prepareSamplingParams prepares sampling parameters for vLLM
 func (vm *VLLMModel) prepareSamplingParams(options *GenerateOptions) map[string]interface{} {
 	params := make(map[string]interface{})
-	
+
 	// Copy base sampling params
 	for k, v := range vm.SamplingParams {
 		params[k] = v
 	}
-	
+
 	// Set defaults
 	if _, exists := params["temperature"]; !exists {
 		params["temperature"] = 0.7
@@ -287,7 +287,7 @@ func (vm *VLLMModel) prepareSamplingParams(options *GenerateOptions) map[string]
 	if _, exists := params["max_tokens"]; !exists {
 		params["max_tokens"] = 2048
 	}
-	
+
 	// Override with options
 	if options != nil {
 		if options.Temperature != nil {
@@ -303,7 +303,7 @@ func (vm *VLLMModel) prepareSamplingParams(options *GenerateOptions) map[string]
 			params["stop"] = options.StopSequences
 		}
 	}
-	
+
 	return params
 }
 
@@ -311,41 +311,41 @@ func (vm *VLLMModel) prepareSamplingParams(options *GenerateOptions) map[string]
 func (vm *VLLMModel) generateWithVLLM(prompt string, samplingParams map[string]interface{}, tools []map[string]interface{}, options *GenerateOptions) (string, map[string]int, error) {
 	// Create a temporary Python script for generation
 	scriptContent := vm.createVLLMScript(prompt, samplingParams, tools, false)
-	
+
 	// Write script to temporary file
 	scriptPath := filepath.Join(vm.tempDir, fmt.Sprintf("vllm_generate_%d.py", time.Now().UnixNano()))
-	
+
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return "", nil, fmt.Errorf("failed to write vLLM script: %w", err)
 	}
 	defer os.Remove(scriptPath)
-	
+
 	// Execute the script
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, vm.pythonPath, scriptPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", nil, fmt.Errorf("vLLM execution failed: %w", err)
 	}
-	
+
 	// Parse the output (assuming JSON format)
 	var result map[string]interface{}
 	if err := json.Unmarshal(output, &result); err != nil {
 		// If JSON parsing fails, return raw output
 		return strings.TrimSpace(string(output)), map[string]int{"input": 100, "output": 50}, nil
 	}
-	
+
 	text, _ := result["text"].(string)
 	inputTokens, _ := result["input_tokens"].(float64)
 	outputTokens, _ := result["output_tokens"].(float64)
-	
+
 	tokenCounts := map[string]int{
 		"input":  int(inputTokens),
 		"output": int(outputTokens),
 	}
-	
+
 	return text, tokenCounts, nil
 }
 
@@ -353,29 +353,29 @@ func (vm *VLLMModel) generateWithVLLM(prompt string, samplingParams map[string]i
 func (vm *VLLMModel) generateStreamWithVLLM(prompt string, samplingParams map[string]interface{}, streamChan chan<- *ChatMessageStreamDelta) error {
 	// Create a temporary Python script for streaming generation
 	scriptContent := vm.createVLLMScript(prompt, samplingParams, nil, true)
-	
+
 	// Write script to temporary file
 	scriptPath := filepath.Join(vm.tempDir, fmt.Sprintf("vllm_stream_%d.py", time.Now().UnixNano()))
-	
+
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return fmt.Errorf("failed to write vLLM script: %w", err)
 	}
 	defer os.Remove(scriptPath)
-	
+
 	// Execute the script
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, vm.pythonPath, scriptPath)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start vLLM process: %w", err)
 	}
-	
+
 	// Read streaming output
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -386,11 +386,11 @@ func (vm *VLLMModel) generateStreamWithVLLM(prompt string, samplingParams map[st
 			}
 		}
 	}
-	
+
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("vLLM process failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -398,7 +398,7 @@ func (vm *VLLMModel) generateStreamWithVLLM(prompt string, samplingParams map[st
 func (vm *VLLMModel) createVLLMScript(prompt string, samplingParams map[string]interface{}, tools []map[string]interface{}, streaming bool) string {
 	// Convert sampling params to JSON
 	samplingParamsJSON, _ := json.Marshal(samplingParams)
-	
+
 	baseScript := fmt.Sprintf(`
 import vllm
 import json
@@ -425,10 +425,10 @@ try:
     # Create SamplingParams object
     sampling_params = SamplingParams(**sampling_params_dict)
     
-    `, vm.ModelPath, vm.TensorParallelSize, vm.GPUMemoryUtilization, 
-		vm.TrustRemoteCode, vm.DType, vm.Seed, vm.ModelPath, 
+    `, vm.ModelPath, vm.TensorParallelSize, vm.GPUMemoryUtilization,
+		vm.TrustRemoteCode, vm.DType, vm.Seed, vm.ModelPath,
 		jsonEscape(prompt), string(samplingParamsJSON))
-	
+
 	if streaming {
 		return baseScript + `
     # Generate with streaming
@@ -441,7 +441,7 @@ except Exception as e:
     sys.exit(1)
 `
 	}
-	
+
 	return baseScript + `
     # Generate response
     outputs = llm.generate([prompt], sampling_params=sampling_params)
@@ -486,18 +486,18 @@ func SupportsVLLMModel(modelID string) bool {
 		"deepseek-ai/",
 		"NousResearch/",
 	}
-	
+
 	for _, prefix := range supportedPrefixes {
 		if strings.HasPrefix(modelID, prefix) {
 			return true
 		}
 	}
-	
+
 	// Also support local paths
 	if _, err := os.Stat(modelID); err == nil {
 		return true
 	}
-	
+
 	return false
 }
 

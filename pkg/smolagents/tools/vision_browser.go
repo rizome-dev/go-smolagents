@@ -16,13 +16,13 @@ import (
 // VisionWebBrowser provides web automation with visual capabilities
 type VisionWebBrowser struct {
 	*BaseTool
-	UserAgent       string        `json:"user_agent"`
-	Timeout         time.Duration `json:"timeout"`
-	ScreenshotPath  string        `json:"screenshot_path"`
-	BrowserPath     string        `json:"browser_path"`
-	Headless        bool          `json:"headless"`
-	WindowSize      string        `json:"window_size"`
-	WaitTime        time.Duration `json:"wait_time"`
+	UserAgent      string        `json:"user_agent"`
+	Timeout        time.Duration `json:"timeout"`
+	ScreenshotPath string        `json:"screenshot_path"`
+	BrowserPath    string        `json:"browser_path"`
+	Headless       bool          `json:"headless"`
+	WindowSize     string        `json:"window_size"`
+	WaitTime       time.Duration `json:"wait_time"`
 }
 
 // NewVisionWebBrowser creates a new vision web browser tool
@@ -77,10 +77,10 @@ func NewVisionWebBrowser() *VisionWebBrowser {
 	}
 
 	browser.ForwardFunc = browser.forward
-	
+
 	// Ensure screenshot directory exists
 	os.MkdirAll(browser.ScreenshotPath, 0755)
-	
+
 	return browser
 }
 
@@ -151,31 +151,31 @@ func (vwb *VisionWebBrowser) navigate(url string) (string, error) {
 	// For now, use simple HTTP client to get page content
 	// In a full implementation, this would use a real browser automation tool
 	client := &http.Client{Timeout: vwb.Timeout}
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("User-Agent", vwb.UserAgent)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to navigate to %s: %w", url, err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("navigation failed with status %d", resp.StatusCode)
 	}
-	
+
 	// Take a screenshot (simulated)
 	screenshotPath, err := vwb.simulateScreenshot(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to take screenshot: %w", err)
 	}
-	
-	return fmt.Sprintf("Successfully navigated to %s\nScreenshot saved to: %s\nPage loaded successfully with status %d", 
+
+	return fmt.Sprintf("Successfully navigated to %s\nScreenshot saved to: %s\nPage loaded successfully with status %d",
 		url, screenshotPath, resp.StatusCode), nil
 }
 
@@ -184,11 +184,11 @@ func (vwb *VisionWebBrowser) click(selector, coordinates string) (string, error)
 	if selector == "" && coordinates == "" {
 		return "", fmt.Errorf("either selector or coordinates must be provided for click action")
 	}
-	
+
 	if selector != "" {
 		return fmt.Sprintf("Clicked on element with selector: %s", selector), nil
 	}
-	
+
 	return fmt.Sprintf("Clicked at coordinates: %s", coordinates), nil
 }
 
@@ -197,11 +197,11 @@ func (vwb *VisionWebBrowser) typeText(selector, text string) (string, error) {
 	if selector == "" {
 		return "", fmt.Errorf("selector is required for type action")
 	}
-	
+
 	if text == "" {
 		return "", fmt.Errorf("text is required for type action")
 	}
-	
+
 	return fmt.Sprintf("Typed '%s' into element with selector: %s", text, selector), nil
 }
 
@@ -211,7 +211,7 @@ func (vwb *VisionWebBrowser) scroll(direction string) (string, error) {
 	if direction == "" {
 		direction = "down" // Default direction
 	}
-	
+
 	valid := false
 	for _, validDir := range validDirections {
 		if direction == validDir {
@@ -219,11 +219,11 @@ func (vwb *VisionWebBrowser) scroll(direction string) (string, error) {
 			break
 		}
 	}
-	
+
 	if !valid {
 		return "", fmt.Errorf("invalid scroll direction: %s (valid: %s)", direction, strings.Join(validDirections, ", "))
 	}
-	
+
 	return fmt.Sprintf("Scrolled %s on the page", direction), nil
 }
 
@@ -232,13 +232,13 @@ func (vwb *VisionWebBrowser) takeScreenshot(filename string) (string, error) {
 	if filename == "" {
 		filename = fmt.Sprintf("screenshot_%d.png", time.Now().Unix())
 	}
-	
+
 	if !strings.HasSuffix(filename, ".png") {
 		filename += ".png"
 	}
-	
+
 	screenshotPath := fmt.Sprintf("%s/%s", vwb.ScreenshotPath, filename)
-	
+
 	// Simulate taking a screenshot
 	return vwb.simulateScreenshot(screenshotPath)
 }
@@ -248,7 +248,7 @@ func (vwb *VisionWebBrowser) extractContent(url, selector string) (string, error
 	if url == "" {
 		return "", fmt.Errorf("URL is required for content extraction")
 	}
-	
+
 	// Fetch the page
 	client := &http.Client{Timeout: vwb.Timeout}
 	resp, err := client.Get(url)
@@ -256,29 +256,29 @@ func (vwb *VisionWebBrowser) extractContent(url, selector string) (string, error
 		return "", fmt.Errorf("failed to fetch page: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Parse the HTML
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse HTML: %w", err)
 	}
-	
+
 	if selector == "" {
 		// Extract all text content
 		return doc.Text(), nil
 	}
-	
+
 	// Extract content matching the selector
 	var content strings.Builder
 	doc.Find(selector).Each(func(i int, s *goquery.Selection) {
 		content.WriteString(s.Text())
 		content.WriteString("\n")
 	})
-	
+
 	if content.Len() == 0 {
 		return fmt.Sprintf("No content found for selector: %s", selector), nil
 	}
-	
+
 	return content.String(), nil
 }
 
@@ -287,10 +287,10 @@ func (vwb *VisionWebBrowser) waitForElement(selector string) (string, error) {
 	if selector == "" {
 		return "", fmt.Errorf("selector is required for wait action")
 	}
-	
+
 	// Simulate waiting
 	time.Sleep(vwb.WaitTime)
-	
+
 	return fmt.Sprintf("Waited for element with selector: %s", selector), nil
 }
 
@@ -301,21 +301,21 @@ func (vwb *VisionWebBrowser) simulateScreenshot(path string) (string, error) {
 	// - Selenium
 	// - Chrome DevTools Protocol
 	// - Puppeteer (via Node.js bridge)
-	
+
 	// For now, create a placeholder image file
 	screenshotPath := path
 	if !strings.Contains(path, "/") {
 		screenshotPath = fmt.Sprintf("%s/%s", vwb.ScreenshotPath, path)
 	}
-	
+
 	// Create a simple placeholder PNG (1x1 pixel)
 	pngData := createPlaceholderPNG()
-	
+
 	err := os.WriteFile(screenshotPath, pngData, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to save screenshot: %w", err)
 	}
-	
+
 	return screenshotPath, nil
 }
 
@@ -332,13 +332,13 @@ func (vwb *VisionWebBrowser) GetBrowserInfo() map[string]interface{} {
 	// Try to detect available browsers
 	browsers := []string{"google-chrome", "chromium", "firefox", "safari"}
 	available := []string{}
-	
+
 	for _, browser := range browsers {
 		if _, err := exec.LookPath(browser); err == nil {
 			available = append(available, browser)
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"available_browsers": available,
 		"headless_mode":      vwb.Headless,
@@ -392,13 +392,13 @@ func NewAutomatedBrowserSession(browser *VisionWebBrowser) *AutomatedBrowserSess
 func (abs *AutomatedBrowserSession) ExecuteScript(script []map[string]interface{}) (string, error) {
 	var results strings.Builder
 	results.WriteString(fmt.Sprintf("Executing browser automation script (Session: %s)\n\n", abs.sessionID))
-	
+
 	for i, action := range script {
 		actionType, ok := action["action"].(string)
 		if !ok {
 			return "", fmt.Errorf("action %d: missing or invalid action type", i)
 		}
-		
+
 		// Convert action map to params
 		params := make(map[string]string)
 		for k, v := range action {
@@ -408,21 +408,21 @@ func (abs *AutomatedBrowserSession) ExecuteScript(script []map[string]interface{
 				}
 			}
 		}
-		
+
 		result, err := abs.browser.executeAction(actionType, params)
 		if err != nil {
 			return "", fmt.Errorf("action %d (%s): %w", i, actionType, err)
 		}
-		
+
 		// Record action
 		abs.actions = append(abs.actions, action)
-		
+
 		results.WriteString(fmt.Sprintf("Step %d: %s\n", i+1, result))
-		
+
 		// Add delay between actions
 		time.Sleep(500 * time.Millisecond)
 	}
-	
+
 	results.WriteString(fmt.Sprintf("\nSession completed successfully. Duration: %v\n", time.Since(abs.startTime)))
 	return results.String(), nil
 }
@@ -430,11 +430,11 @@ func (abs *AutomatedBrowserSession) ExecuteScript(script []map[string]interface{
 // GetSessionSummary returns a summary of the automation session
 func (abs *AutomatedBrowserSession) GetSessionSummary() map[string]interface{} {
 	return map[string]interface{}{
-		"session_id":   abs.sessionID,
-		"start_time":   abs.startTime,
-		"duration":     time.Since(abs.startTime),
-		"current_url":  abs.currentURL,
+		"session_id":    abs.sessionID,
+		"start_time":    abs.startTime,
+		"duration":      time.Since(abs.startTime),
+		"current_url":   abs.currentURL,
 		"actions_count": len(abs.actions),
-		"actions":      abs.actions,
+		"actions":       abs.actions,
 	}
 }

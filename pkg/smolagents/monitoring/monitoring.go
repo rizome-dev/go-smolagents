@@ -48,7 +48,7 @@ const (
 	PurpleColor = "\033[35m"
 	CyanColor   = "\033[36m"
 	WhiteColor  = "\033[37m"
-	
+
 	// HEX color constants
 	YELLOW_HEX = "#FFD700"
 )
@@ -80,7 +80,7 @@ func (tu *TokenUsage) Add(other *TokenUsage) {
 
 // String returns a string representation of token usage
 func (tu *TokenUsage) String() string {
-	return fmt.Sprintf("TokenUsage(input=%d, output=%d, total=%d)", 
+	return fmt.Sprintf("TokenUsage(input=%d, output=%d, total=%d)",
 		tu.InputTokens, tu.OutputTokens, tu.TotalTokens)
 }
 
@@ -111,11 +111,11 @@ func (t *Timing) GetDuration() time.Duration {
 	if t.Duration != nil {
 		return *t.Duration
 	}
-	
+
 	if t.EndTime != nil {
 		return t.EndTime.Sub(t.StartTime)
 	}
-	
+
 	return time.Since(t.StartTime)
 }
 
@@ -182,13 +182,13 @@ func (al *AgentLogger) isEnabled(level LogLevel) bool {
 // formatMessage formats a log message with color, timestamp, and prefix
 func (al *AgentLogger) formatMessage(level LogLevel, message string) string {
 	var parts []string
-	
+
 	// Add timestamp
 	if al.timestamps {
 		timestamp := time.Now().Format("15:04:05")
 		parts = append(parts, timestamp)
 	}
-	
+
 	// Add level with color
 	levelStr := level.String()
 	if al.useColors {
@@ -202,15 +202,15 @@ func (al *AgentLogger) formatMessage(level LogLevel, message string) string {
 		}
 	}
 	parts = append(parts, fmt.Sprintf("[%s]", levelStr))
-	
+
 	// Add prefix
 	if al.prefix != "" {
 		parts = append(parts, al.prefix)
 	}
-	
+
 	// Add message
 	parts = append(parts, message)
-	
+
 	return strings.Join(parts, " ")
 }
 
@@ -219,7 +219,7 @@ func (al *AgentLogger) log(level LogLevel, message string) {
 	if !al.isEnabled(level) {
 		return
 	}
-	
+
 	formatted := al.formatMessage(level, message)
 	fmt.Fprintln(al.output, formatted)
 }
@@ -253,12 +253,12 @@ func (al *AgentLogger) LogStep(stepNumber int, stepType string, content string) 
 	if !al.isEnabled(LogLevelINFO) {
 		return
 	}
-	
+
 	header := fmt.Sprintf("=== Step %d: %s ===", stepNumber, stepType)
 	if al.useColors {
 		header = YellowColor + header + ResetColor
 	}
-	
+
 	al.Info(header)
 	if content != "" {
 		// Indent the content
@@ -274,12 +274,12 @@ func (al *AgentLogger) LogToolCall(toolName string, args map[string]interface{})
 	if !al.isEnabled(LogLevelINFO) {
 		return
 	}
-	
+
 	header := fmt.Sprintf("🔧 Tool Call: %s", toolName)
 	if al.useColors {
 		header = GreenColor + header + ResetColor
 	}
-	
+
 	al.Info(header)
 	for k, v := range args {
 		al.Info("  %s: %v", k, v)
@@ -291,7 +291,7 @@ func (al *AgentLogger) LogToolResult(toolName string, result interface{}, err er
 	if !al.isEnabled(LogLevelINFO) {
 		return
 	}
-	
+
 	if err != nil {
 		header := fmt.Sprintf("❌ Tool Error: %s", toolName)
 		if al.useColors {
@@ -314,8 +314,8 @@ func (al *AgentLogger) LogTokenUsage(usage *TokenUsage) {
 	if !al.isEnabled(LogLevelDEBUG) || usage == nil {
 		return
 	}
-	
-	al.Debug("Token Usage: input=%d, output=%d, total=%d", 
+
+	al.Debug("Token Usage: input=%d, output=%d, total=%d",
 		usage.InputTokens, usage.OutputTokens, usage.TotalTokens)
 }
 
@@ -324,21 +324,21 @@ func (al *AgentLogger) LogTiming(operation string, timing *Timing) {
 	if !al.isEnabled(LogLevelDEBUG) || timing == nil {
 		return
 	}
-	
+
 	duration := timing.GetDuration()
 	al.Debug("Timing [%s]: %v", operation, duration.Truncate(time.Millisecond))
 }
 
 // Monitor provides comprehensive monitoring for agent execution
 type Monitor struct {
-	logger              *AgentLogger
-	startTime           time.Time
-	stepDurations       []time.Duration
-	totalInputTokens    int
-	totalOutputTokens   int
-	totalTokens         int
-	currentStepStart    time.Time
-	enabled             bool
+	logger            *AgentLogger
+	startTime         time.Time
+	stepDurations     []time.Duration
+	totalInputTokens  int
+	totalOutputTokens int
+	totalTokens       int
+	currentStepStart  time.Time
+	enabled           bool
 }
 
 // NewMonitor creates a new monitor instance
@@ -346,7 +346,7 @@ func NewMonitor(logger *AgentLogger) *Monitor {
 	if logger == nil {
 		logger = NewAgentLogger(LogLevelINFO)
 	}
-	
+
 	return &Monitor{
 		logger:        logger,
 		startTime:     time.Now(),
@@ -375,7 +375,7 @@ func (m *Monitor) StartStep(stepNumber int, stepType string) {
 	if !m.enabled {
 		return
 	}
-	
+
 	m.currentStepStart = time.Now()
 	m.logger.LogStep(stepNumber, stepType, "")
 }
@@ -385,7 +385,7 @@ func (m *Monitor) EndStep() {
 	if !m.enabled {
 		return
 	}
-	
+
 	if !m.currentStepStart.IsZero() {
 		duration := time.Since(m.currentStepStart)
 		m.stepDurations = append(m.stepDurations, duration)
@@ -402,7 +402,7 @@ func (m *Monitor) LogToolCall(toolName string, args map[string]interface{}) {
 	if !m.enabled {
 		return
 	}
-	
+
 	m.logger.LogToolCall(toolName, args)
 }
 
@@ -411,7 +411,7 @@ func (m *Monitor) LogToolResult(toolName string, result interface{}, err error) 
 	if !m.enabled {
 		return
 	}
-	
+
 	m.logger.LogToolResult(toolName, result, err)
 }
 
@@ -420,11 +420,11 @@ func (m *Monitor) AddTokenUsage(usage *TokenUsage) {
 	if !m.enabled || usage == nil {
 		return
 	}
-	
+
 	m.totalInputTokens += usage.InputTokens
 	m.totalOutputTokens += usage.OutputTokens
 	m.totalTokens += usage.TotalTokens
-	
+
 	m.logger.LogTokenUsage(usage)
 }
 
@@ -454,12 +454,12 @@ func (m *Monitor) GetAverageStepDuration() time.Duration {
 	if len(m.stepDurations) == 0 {
 		return 0
 	}
-	
+
 	var total time.Duration
 	for _, duration := range m.stepDurations {
 		total += duration
 	}
-	
+
 	return total / time.Duration(len(m.stepDurations))
 }
 
@@ -468,17 +468,17 @@ func (m *Monitor) LogSummary() {
 	if !m.enabled {
 		return
 	}
-	
+
 	m.logger.Info("=== Execution Summary ===")
 	m.logger.Info("Total Duration: %v", m.GetTotalDuration().Truncate(time.Millisecond))
 	m.logger.Info("Total Steps: %d", len(m.stepDurations))
-	
+
 	if len(m.stepDurations) > 0 {
 		m.logger.Info("Average Step Duration: %v", m.GetAverageStepDuration().Truncate(time.Millisecond))
 	}
-	
+
 	if m.totalTokens > 0 {
-		m.logger.Info("Total Tokens: %d (input: %d, output: %d)", 
+		m.logger.Info("Total Tokens: %d (input: %d, output: %d)",
 			m.totalTokens, m.totalInputTokens, m.totalOutputTokens)
 	}
 }
@@ -499,13 +499,13 @@ func (m *Monitor) CreateChildLogger(prefix string) *AgentLogger {
 	childLogger.SetOutput(m.logger.output)
 	childLogger.SetUseColors(m.logger.useColors)
 	childLogger.SetTimestamps(m.logger.timestamps)
-	
+
 	if m.logger.prefix != "" {
 		childLogger.SetPrefix(m.logger.prefix + ":" + prefix)
 	} else {
 		childLogger.SetPrefix(prefix)
 	}
-	
+
 	return childLogger
 }
 

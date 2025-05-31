@@ -28,12 +28,12 @@ type JSONSchema struct {
 
 // StructuredOutput represents a parsed structured output
 type StructuredOutput struct {
-	Content     interface{}            `json:"content"`      // The parsed content
-	Raw         string                 `json:"raw"`          // Raw text output
-	Format      *ResponseFormat        `json:"format"`       // The format used
-	Valid       bool                   `json:"valid"`        // Whether output is valid according to schema
-	Errors      []string               `json:"errors"`       // Validation errors if any
-	Metadata    map[string]interface{} `json:"metadata"`     // Additional metadata
+	Content  interface{}            `json:"content"`  // The parsed content
+	Raw      string                 `json:"raw"`      // Raw text output
+	Format   *ResponseFormat        `json:"format"`   // The format used
+	Valid    bool                   `json:"valid"`    // Whether output is valid according to schema
+	Errors   []string               `json:"errors"`   // Validation errors if any
+	Metadata map[string]interface{} `json:"metadata"` // Additional metadata
 }
 
 // SchemaValidator provides schema validation functionality
@@ -123,7 +123,7 @@ func (sv *SchemaValidator) validateAgainstSchema(data interface{}, schema map[st
 // validateObject validates an object against object schema
 func (sv *SchemaValidator) validateObject(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
-	
+
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
 		return []string{"data is not an object"}
@@ -175,7 +175,7 @@ func (sv *SchemaValidator) validateObject(data interface{}, schema map[string]in
 // validateArray validates an array against array schema
 func (sv *SchemaValidator) validateArray(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
-	
+
 	dataArray := reflect.ValueOf(data)
 	if dataArray.Kind() != reflect.Slice && dataArray.Kind() != reflect.Array {
 		return []string{"data is not an array"}
@@ -221,7 +221,7 @@ func (sv *SchemaValidator) validateArray(data interface{}, schema map[string]int
 // validateString validates a string against string schema
 func (sv *SchemaValidator) validateString(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
-	
+
 	str, ok := data.(string)
 	if !ok {
 		return []string{"data is not a string"}
@@ -267,7 +267,7 @@ func (sv *SchemaValidator) validateString(data interface{}, schema map[string]in
 // validateNumber validates a number against number schema
 func (sv *SchemaValidator) validateNumber(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
-	
+
 	var num float64
 	var isInt bool
 	switch v := data.(type) {
@@ -397,7 +397,7 @@ func (sg *StructuredGenerator) ParseStructuredOutput(output string, format *Resp
 func (sg *StructuredGenerator) parseJSONOutput(output string, format *ResponseFormat, result *StructuredOutput) (*StructuredOutput, error) {
 	// Extract JSON from output (handle markdown code blocks, etc.)
 	jsonStr := sg.extractJSON(output)
-	
+
 	// Parse JSON
 	var jsonData interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &jsonData); err != nil {
@@ -429,7 +429,7 @@ func (sg *StructuredGenerator) parseJSONOutput(output string, format *ResponseFo
 func (sg *StructuredGenerator) extractJSON(text string) string {
 	// Remove markdown code blocks
 	text = strings.TrimSpace(text)
-	
+
 	// Handle ```json code blocks
 	if strings.HasPrefix(text, "```json") {
 		lines := strings.Split(text, "\n")
@@ -439,7 +439,7 @@ func (sg *StructuredGenerator) extractJSON(text string) string {
 			return strings.Join(jsonLines, "\n")
 		}
 	}
-	
+
 	// Handle ``` code blocks
 	if strings.HasPrefix(text, "```") {
 		lines := strings.Split(text, "\n")

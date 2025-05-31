@@ -55,9 +55,9 @@ var ToolMapping = map[string]func() tools.Tool{
 // GoInterpreterTool evaluates Go code safely
 type GoInterpreterTool struct {
 	*tools.BaseTool
-	AuthorizedPackages []string                       `json:"authorized_packages"`
+	AuthorizedPackages []string                               `json:"authorized_packages"`
 	GoEvaluator        func(string, []string) (string, error) `json:"-"`
-	executor           GoExecutor                     `json:"-"`
+	executor           GoExecutor                             `json:"-"`
 }
 
 // GoExecutor interface for executing Go code
@@ -78,7 +78,7 @@ func NewGoInterpreterTool(authorizedPackages ...[]string) *GoInterpreterTool {
 		packages = make([]string, len(BaseBuiltinPackages))
 		copy(packages, BaseBuiltinPackages)
 	}
-	
+
 	inputs := map[string]*tools.ToolInput{
 		"code": tools.NewToolInput(
 			"string",
@@ -86,14 +86,14 @@ func NewGoInterpreterTool(authorizedPackages ...[]string) *GoInterpreterTool {
 				"else you will get an error. This code can only import the following Go packages: %v.", packages),
 		),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"go_interpreter",
 		"This is a tool that evaluates Go code. It can be used to perform calculations and data processing.",
 		inputs,
 		"string",
 	)
-	
+
 	// Create real Go executor
 	executor, err := executors.NewGoExecutor(map[string]interface{}{
 		"authorized_packages": packages,
@@ -115,10 +115,10 @@ func NewGoInterpreterTool(authorizedPackages ...[]string) *GoInterpreterTool {
 		GoEvaluator:        evaluateGoCode, // Fallback implementation
 		executor:           executor,
 	}
-	
+
 	// Set the forward function
 	git.ForwardFunc = git.forward
-	
+
 	return git
 }
 
@@ -131,7 +131,7 @@ func NewGoInterpreterToolWithExecutor(executor GoExecutor, authorizedPackages ..
 		packages = make([]string, len(BaseBuiltinPackages))
 		copy(packages, BaseBuiltinPackages)
 	}
-	
+
 	inputs := map[string]*tools.ToolInput{
 		"code": tools.NewToolInput(
 			"string",
@@ -139,24 +139,24 @@ func NewGoInterpreterToolWithExecutor(executor GoExecutor, authorizedPackages ..
 				"else you will get an error. This code can only import the following Go packages: %v.", packages),
 		),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"go_interpreter",
 		"This is a tool that evaluates Go code. It can be used to perform calculations and data processing.",
 		inputs,
 		"string",
 	)
-	
+
 	git := &GoInterpreterTool{
 		BaseTool:           baseTool,
 		AuthorizedPackages: packages,
 		GoEvaluator:        evaluateGoCode, // Fallback implementation
 		executor:           executor,
 	}
-	
+
 	// Set the forward function
 	git.ForwardFunc = git.forward
-	
+
 	return git
 }
 
@@ -165,12 +165,12 @@ func (git *GoInterpreterTool) forward(args ...interface{}) (interface{}, error) 
 	if len(args) == 0 {
 		return nil, fmt.Errorf("code parameter is required")
 	}
-	
+
 	code, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("code must be a string")
 	}
-	
+
 	// Use the real executor if available
 	if git.executor != nil {
 		result, err := git.executor.Execute(code, git.AuthorizedPackages)
@@ -179,13 +179,13 @@ func (git *GoInterpreterTool) forward(args ...interface{}) (interface{}, error) 
 		}
 		return result, nil
 	}
-	
+
 	// Fall back to the simple evaluator
 	result, err := git.GoEvaluator(code, git.AuthorizedPackages)
 	if err != nil {
 		return fmt.Sprintf("Error: %s", err.Error()), nil
 	}
-	
+
 	return result, nil
 }
 
@@ -208,9 +208,9 @@ func evaluateGoCode(code string, authorizedPackages []string) (string, error) {
 	// 3. Execute the code safely
 	// 4. Capture stdout and return value
 	// 5. Handle errors appropriately
-	
+
 	// For now, return a placeholder
-	return fmt.Sprintf("Go code execution (placeholder):\n%s\n\nAuthorized packages: %v", 
+	return fmt.Sprintf("Go code execution (placeholder):\n%s\n\nAuthorized packages: %v",
 		code, authorizedPackages), nil
 }
 
@@ -224,21 +224,21 @@ func NewFinalAnswerTool() *FinalAnswerTool {
 	inputs := map[string]*tools.ToolInput{
 		"answer": tools.NewToolInput("any", "The final answer to the problem"),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"final_answer",
 		"Provides a final answer to the given problem.",
 		inputs,
 		"any",
 	)
-	
+
 	fat := &FinalAnswerTool{
 		BaseTool: baseTool,
 	}
-	
+
 	// Set the forward function
 	fat.ForwardFunc = fat.forward
-	
+
 	return fat
 }
 
@@ -247,7 +247,7 @@ func (fat *FinalAnswerTool) forward(args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
-	
+
 	// Pass through the answer as-is
 	return args[0], nil
 }
@@ -262,21 +262,21 @@ func NewUserInputTool() *UserInputTool {
 	inputs := map[string]*tools.ToolInput{
 		"question": tools.NewToolInput("string", "The question to ask the user"),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"user_input",
 		"Asks for user's input on a specific question",
 		inputs,
 		"string",
 	)
-	
+
 	uit := &UserInputTool{
 		BaseTool: baseTool,
 	}
-	
+
 	// Set the forward function
 	uit.ForwardFunc = uit.forward
-	
+
 	return uit
 }
 
@@ -285,21 +285,21 @@ func (uit *UserInputTool) forward(args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("question parameter is required")
 	}
-	
+
 	question, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("question must be a string")
 	}
-	
+
 	// Ask user for input
 	fmt.Printf("%s => Type your answer here: ", question)
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, fmt.Errorf("failed to read user input: %w", err)
 	}
-	
+
 	return strings.TrimSpace(response), nil
 }
 
@@ -315,20 +315,20 @@ func NewWebSearchTool(options ...map[string]interface{}) *WebSearchTool {
 	inputs := map[string]*tools.ToolInput{
 		"query": tools.NewToolInput("string", "The search query to execute"),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"web_search",
 		"Performs web search and returns formatted results. Supports multiple search engines.",
 		inputs,
 		"string",
 	)
-	
+
 	wst := &WebSearchTool{
 		BaseTool:   baseTool,
-		MaxResults: 10,        // Default
+		MaxResults: 10,           // Default
 		Engine:     "duckduckgo", // Default engine
 	}
-	
+
 	if len(options) > 0 {
 		if maxResults, ok := options[0]["max_results"].(int); ok {
 			wst.MaxResults = maxResults
@@ -337,10 +337,10 @@ func NewWebSearchTool(options ...map[string]interface{}) *WebSearchTool {
 			wst.Engine = engine
 		}
 	}
-	
+
 	// Set the forward function
 	wst.ForwardFunc = wst.forward
-	
+
 	return wst
 }
 
@@ -349,12 +349,12 @@ func (wst *WebSearchTool) forward(args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("query parameter is required")
 	}
-	
+
 	query, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("query must be a string")
 	}
-	
+
 	switch wst.Engine {
 	case "duckduckgo":
 		return wst.searchDuckDuckGo(query)
@@ -367,11 +367,11 @@ func (wst *WebSearchTool) forward(args ...interface{}) (interface{}, error) {
 func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
 	// This is a simplified implementation
 	// In a real implementation, this would use the DuckDuckGo API or scraping
-	
+
 	// URL encode the query
 	encodedQuery := url.QueryEscape(query)
 	searchURL := fmt.Sprintf("https://duckduckgo.com/?q=%s&format=json&no_html=1", encodedQuery)
-	
+
 	// Make HTTP request
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(searchURL)
@@ -379,19 +379,19 @@ func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
 		return "", fmt.Errorf("search request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("search request failed with status: %d", resp.StatusCode)
 	}
-	
+
 	// Parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	// This is a placeholder - real implementation would parse DuckDuckGo response
-	return fmt.Sprintf("Search results for '%s':\n\n(Placeholder implementation - would contain actual search results)\n\nRaw response length: %d bytes", 
+	return fmt.Sprintf("Search results for '%s':\n\n(Placeholder implementation - would contain actual search results)\n\nRaw response length: %d bytes",
 		query, len(body)), nil
 }
 
@@ -407,20 +407,20 @@ func NewVisitWebpageTool(options ...map[string]interface{}) *VisitWebpageTool {
 	inputs := map[string]*tools.ToolInput{
 		"url": tools.NewToolInput("string", "The URL of the webpage to visit"),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"visit_webpage",
 		"Visits a webpage and converts its content to markdown format.",
 		inputs,
 		"string",
 	)
-	
+
 	vwt := &VisitWebpageTool{
 		BaseTool:        baseTool,
 		MaxOutputLength: 40000, // Default 40k characters
 		Timeout:         20,    // Default 20 seconds
 	}
-	
+
 	if len(options) > 0 {
 		if maxLength, ok := options[0]["max_output_length"].(int); ok {
 			vwt.MaxOutputLength = maxLength
@@ -429,10 +429,10 @@ func NewVisitWebpageTool(options ...map[string]interface{}) *VisitWebpageTool {
 			vwt.Timeout = timeout
 		}
 	}
-	
+
 	// Set the forward function
 	vwt.ForwardFunc = vwt.forward
-	
+
 	return vwt
 }
 
@@ -441,23 +441,23 @@ func (vwt *VisitWebpageTool) forward(args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("url parameter is required")
 	}
-	
+
 	urlStr, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("url must be a string")
 	}
-	
+
 	// Validate URL
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
-	
+
 	if parsedURL.Scheme == "" {
 		parsedURL.Scheme = "https"
 		urlStr = parsedURL.String()
 	}
-	
+
 	// Make HTTP request
 	client := &http.Client{Timeout: time.Duration(vwt.Timeout) * time.Second}
 	resp, err := client.Get(urlStr)
@@ -465,25 +465,25 @@ func (vwt *VisitWebpageTool) forward(args ...interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("failed to fetch webpage: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("webpage request failed with status: %d", resp.StatusCode)
 	}
-	
+
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read webpage content: %w", err)
 	}
-	
+
 	// Convert HTML to markdown (simplified implementation)
 	markdown := vwt.htmlToMarkdown(string(body))
-	
+
 	// Truncate if necessary
 	if len(markdown) > vwt.MaxOutputLength {
 		markdown = utils.TruncateContent(markdown, vwt.MaxOutputLength)
 	}
-	
+
 	return markdown, nil
 }
 
@@ -491,47 +491,47 @@ func (vwt *VisitWebpageTool) forward(args ...interface{}) (interface{}, error) {
 func (vwt *VisitWebpageTool) htmlToMarkdown(htmlContent string) string {
 	// This is a very simplified HTML to Markdown converter
 	// In a real implementation, you'd use a proper HTML parser and markdown converter
-	
+
 	// Remove script and style tags
 	scriptRegex := regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`)
 	htmlContent = scriptRegex.ReplaceAllString(htmlContent, "")
-	
+
 	styleRegex := regexp.MustCompile(`(?i)<style[^>]*>.*?</style>`)
 	htmlContent = styleRegex.ReplaceAllString(htmlContent, "")
-	
+
 	// Convert common HTML tags to markdown
 	conversions := map[string]string{
-		`<h1[^>]*>(.*?)</h1>`:       "# $1",
-		`<h2[^>]*>(.*?)</h2>`:       "## $1",
-		`<h3[^>]*>(.*?)</h3>`:       "### $1",
-		`<h4[^>]*>(.*?)</h4>`:       "#### $1",
-		`<h5[^>]*>(.*?)</h5>`:       "##### $1",
-		`<h6[^>]*>(.*?)</h6>`:       "###### $1",
+		`<h1[^>]*>(.*?)</h1>`:         "# $1",
+		`<h2[^>]*>(.*?)</h2>`:         "## $1",
+		`<h3[^>]*>(.*?)</h3>`:         "### $1",
+		`<h4[^>]*>(.*?)</h4>`:         "#### $1",
+		`<h5[^>]*>(.*?)</h5>`:         "##### $1",
+		`<h6[^>]*>(.*?)</h6>`:         "###### $1",
 		`<strong[^>]*>(.*?)</strong>`: "**$1**",
-		`<b[^>]*>(.*?)</b>`:         "**$1**",
-		`<em[^>]*>(.*?)</em>`:       "*$1*",
-		`<i[^>]*>(.*?)</i>`:         "*$1*",
-		`<p[^>]*>(.*?)</p>`:         "$1\n\n",
-		`<br[^>]*>`:                 "\n",
-		`<hr[^>]*>`:                 "\n---\n",
+		`<b[^>]*>(.*?)</b>`:           "**$1**",
+		`<em[^>]*>(.*?)</em>`:         "*$1*",
+		`<i[^>]*>(.*?)</i>`:           "*$1*",
+		`<p[^>]*>(.*?)</p>`:           "$1\n\n",
+		`<br[^>]*>`:                   "\n",
+		`<hr[^>]*>`:                   "\n---\n",
 	}
-	
+
 	for pattern, replacement := range conversions {
 		regex := regexp.MustCompile(`(?i)` + pattern)
 		htmlContent = regex.ReplaceAllString(htmlContent, replacement)
 	}
-	
+
 	// Handle links
 	linkRegex := regexp.MustCompile(`(?i)<a[^>]*href=["']([^"']*)["'][^>]*>(.*?)</a>`)
 	htmlContent = linkRegex.ReplaceAllString(htmlContent, "[$2]($1)")
-	
+
 	// Remove remaining HTML tags
 	tagRegex := regexp.MustCompile(`<[^>]*>`)
 	htmlContent = tagRegex.ReplaceAllString(htmlContent, "")
-	
+
 	// Decode HTML entities
 	htmlContent = html.UnescapeString(htmlContent)
-	
+
 	// Clean up whitespace
 	lines := strings.Split(htmlContent, "\n")
 	var cleanLines []string
@@ -541,7 +541,7 @@ func (vwt *VisitWebpageTool) htmlToMarkdown(htmlContent string) string {
 			cleanLines = append(cleanLines, line)
 		}
 	}
-	
+
 	return strings.Join(cleanLines, "\n")
 }
 
@@ -559,14 +559,14 @@ func NewWikipediaSearchTool(options ...map[string]interface{}) *WikipediaSearchT
 	inputs := map[string]*tools.ToolInput{
 		"query": tools.NewToolInput("string", "The search query for Wikipedia"),
 	}
-	
+
 	baseTool := tools.NewBaseTool(
 		"wikipedia_search",
 		"Searches Wikipedia and returns formatted content for the query.",
 		inputs,
 		"string",
 	)
-	
+
 	wst := &WikipediaSearchTool{
 		BaseTool:      baseTool,
 		UserAgent:     "smolagents/1.0 (https://github.com/huggingface/smolagents)",
@@ -574,7 +574,7 @@ func NewWikipediaSearchTool(options ...map[string]interface{}) *WikipediaSearchT
 		ContentType:   "text",
 		ExtractFormat: "wiki",
 	}
-	
+
 	if len(options) > 0 {
 		if userAgent, ok := options[0]["user_agent"].(string); ok {
 			wst.UserAgent = userAgent
@@ -589,10 +589,10 @@ func NewWikipediaSearchTool(options ...map[string]interface{}) *WikipediaSearchT
 			wst.ExtractFormat = extractFormat
 		}
 	}
-	
+
 	// Set the forward function
 	wst.ForwardFunc = wst.forward
-	
+
 	return wst
 }
 
@@ -601,72 +601,72 @@ func (wst *WikipediaSearchTool) forward(args ...interface{}) (interface{}, error
 	if len(args) == 0 {
 		return nil, fmt.Errorf("query parameter is required")
 	}
-	
+
 	query, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("query must be a string")
 	}
-	
+
 	return wst.searchWikipedia(query)
 }
 
 // searchWikipedia performs a Wikipedia search
 func (wst *WikipediaSearchTool) searchWikipedia(query string) (string, error) {
 	// Search for the article
-	searchURL := fmt.Sprintf("https://%s.wikipedia.org/api/rest_v1/page/summary/%s", 
+	searchURL := fmt.Sprintf("https://%s.wikipedia.org/api/rest_v1/page/summary/%s",
 		wst.Language, url.QueryEscape(query))
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("User-Agent", wst.UserAgent)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("Wikipedia request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Sprintf("No Wikipedia article found for query: %s", query), nil
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("Wikipedia request failed with status: %d", resp.StatusCode)
 	}
-	
+
 	// Parse response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read Wikipedia response: %w", err)
 	}
-	
+
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("failed to parse Wikipedia response: %w", err)
 	}
-	
+
 	// Extract information
 	title, _ := result["title"].(string)
 	extract, _ := result["extract"].(string)
 	pageURL, _ := result["content_urls"].(map[string]interface{})
-	
+
 	var urlStr string
 	if pageURL != nil {
 		if desktop, ok := pageURL["desktop"].(map[string]interface{}); ok {
 			urlStr, _ = desktop["page"].(string)
 		}
 	}
-	
+
 	// Format result
 	output := fmt.Sprintf("# %s\n\n%s", title, extract)
 	if urlStr != "" {
 		output += fmt.Sprintf("\n\nSource: %s", urlStr)
 	}
-	
+
 	return output, nil
 }
 
@@ -676,7 +676,7 @@ func GetToolByName(name string) (tools.Tool, error) {
 	if !exists {
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
-	
+
 	return constructor(), nil
 }
 
@@ -721,33 +721,33 @@ func (pit *PythonInterpreterTool) forward(args ...interface{}) (interface{}, err
 func (pit *PythonInterpreterTool) executePython(code string) (string, error) {
 	// Create a temporary Python script
 	cmd := exec.Command(pit.PythonPath, "-c", code)
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Set timeout for execution
 	timer := time.AfterFunc(30*time.Second, func() {
 		cmd.Process.Kill()
 	})
 	defer timer.Stop()
-	
+
 	err := cmd.Run()
-	
+
 	output := stdout.String()
 	errOutput := stderr.String()
-	
+
 	if err != nil {
 		if errOutput != "" {
 			return "", fmt.Errorf("Python execution error: %s", errOutput)
 		}
 		return "", fmt.Errorf("Python execution failed: %w", err)
 	}
-	
+
 	if errOutput != "" && output == "" {
 		return errOutput, nil
 	}
-	
+
 	return output, nil
 }
 
@@ -805,7 +805,7 @@ func (ddg *DuckDuckGoSearchTool) forward(args ...interface{}) (interface{}, erro
 
 func (ddg *DuckDuckGoSearchTool) searchDuckDuckGo(query string, maxResults int) (string, error) {
 	// DuckDuckGo instant answer API
-	searchURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1", 
+	searchURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1",
 		url.QueryEscape(query))
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -940,7 +940,7 @@ func (gs *GoogleSearchTool) searchGoogle(query string, maxResults int) (string, 
 
 	switch gs.SearchEngine {
 	case "serp":
-		searchURL = fmt.Sprintf("https://serpapi.com/search?q=%s&api_key=%s&num=%d", 
+		searchURL = fmt.Sprintf("https://serpapi.com/search?q=%s&api_key=%s&num=%d",
 			url.QueryEscape(query), gs.APIKey, maxResults)
 		headers = map[string]string{
 			"User-Agent": "Mozilla/5.0 (compatible; SmolagentsBot/1.0)",
@@ -948,7 +948,7 @@ func (gs *GoogleSearchTool) searchGoogle(query string, maxResults int) (string, 
 	case "serper":
 		searchURL = "https://google.serper.dev/search"
 		headers = map[string]string{
-			"X-API-KEY": gs.APIKey,
+			"X-API-KEY":    gs.APIKey,
 			"Content-Type": "application/json",
 		}
 	default:
@@ -956,13 +956,13 @@ func (gs *GoogleSearchTool) searchGoogle(query string, maxResults int) (string, 
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
-	
+
 	var req *http.Request
 	var err error
-	
+
 	if gs.SearchEngine == "serper" {
 		requestBody := map[string]interface{}{
-			"q": query,
+			"q":   query,
 			"num": maxResults,
 		}
 		jsonBody, _ := json.Marshal(requestBody)
@@ -970,7 +970,7 @@ func (gs *GoogleSearchTool) searchGoogle(query string, maxResults int) (string, 
 	} else {
 		req, err = http.NewRequest("GET", searchURL, nil)
 	}
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1008,7 +1008,7 @@ func (gs *GoogleSearchTool) formatGoogleResults(query string, result map[string]
 
 	// Handle different response formats
 	var organicResults []interface{}
-	
+
 	if results, ok := result["organic_results"].([]interface{}); ok {
 		organicResults = results // SerpAPI format
 	} else if results, ok := result["organic"].([]interface{}); ok {
@@ -1023,12 +1023,12 @@ func (gs *GoogleSearchTool) formatGoogleResults(query string, result map[string]
 		if i >= gs.MaxResults {
 			break
 		}
-		
+
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			title, _ := itemMap["title"].(string)
 			link, _ := itemMap["link"].(string)
 			snippet, _ := itemMap["snippet"].(string)
-			
+
 			if title != "" && link != "" {
 				output.WriteString(fmt.Sprintf("%d. %s\n", i+1, title))
 				output.WriteString(fmt.Sprintf("   URL: %s\n", link))
@@ -1046,10 +1046,10 @@ func (gs *GoogleSearchTool) formatGoogleResults(query string, result map[string]
 // SpeechToTextTool converts audio to text using Whisper
 type SpeechToTextTool struct {
 	*tools.BaseTool
-	Model      string `json:"model"`
-	Language   string `json:"language"`
-	APIKey     string `json:"api_key"`
-	APIBase    string `json:"api_base"`
+	Model    string `json:"model"`
+	Language string `json:"language"`
+	APIKey   string `json:"api_key"`
+	APIBase  string `json:"api_base"`
 }
 
 // NewSpeechToTextTool creates a new speech-to-text tool
@@ -1109,7 +1109,7 @@ func (stt *SpeechToTextTool) transcribeAudio(audioPath, language string) (string
 	// 1. Load the audio file
 	// 2. Send it to OpenAI Whisper API or run local Whisper model
 	// 3. Return the transcribed text
-	
+
 	return fmt.Sprintf("Speech-to-text transcription placeholder for audio: %s (language: %s)\n\nThis would contain the transcribed text from the audio file.", audioPath, language), nil
 }
 
@@ -1185,7 +1185,7 @@ func (pt *PipelineTool) executePipeline(text, pipelineType, modelName string) (s
 	// 1. Use HuggingFace Inference API or local transformers
 	// 2. Execute the specified pipeline
 	// 3. Return the processed results
-	
+
 	return fmt.Sprintf("Pipeline execution placeholder:\nType: %s\nModel: %s\nInput: %s\n\nThis would contain the actual pipeline results.", pipelineType, modelName, text), nil
 }
 
@@ -1207,21 +1207,21 @@ func NewVisionBrowser() tools.Tool {
 	}
 
 	tool := tools.NewBaseTool("vision_browser", "Automated web browser with vision capabilities", inputs, "string")
-	
+
 	tool.ForwardFunc = func(args ...interface{}) (interface{}, error) {
 		if len(args) == 0 {
 			return nil, fmt.Errorf("action parameter is required")
 		}
-		
+
 		action, ok := args[0].(string)
 		if !ok {
 			return nil, fmt.Errorf("action must be a string")
 		}
-		
+
 		// Placeholder implementation
 		return fmt.Sprintf("Vision browser action '%s' executed successfully. This is a placeholder implementation.", action), nil
 	}
-	
+
 	return tool
 }
 

@@ -111,11 +111,11 @@ type CodeBlock struct {
 // ParseCodeBlobs extracts code blocks from text, supporting various formats
 func ParseCodeBlobs(text string) []CodeBlock {
 	var blocks []CodeBlock
-	
+
 	// Pattern for fenced code blocks (```language\ncode\n```)
 	fencedPattern := regexp.MustCompile("```(\\w*)\\s*\\n([\\s\\S]*?)\\n```")
 	matches := fencedPattern.FindAllStringSubmatch(text, -1)
-	
+
 	for _, match := range matches {
 		language := strings.TrimSpace(match[1])
 		code := strings.TrimSpace(match[2])
@@ -126,13 +126,13 @@ func ParseCodeBlobs(text string) []CodeBlock {
 			})
 		}
 	}
-	
+
 	// Pattern for indented code blocks (4+ spaces)
 	if len(blocks) == 0 {
 		lines := strings.Split(text, "\n")
 		var codeLines []string
 		inCodeBlock := false
-		
+
 		for _, line := range lines {
 			if strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
 				// This is a code line
@@ -156,7 +156,7 @@ func ParseCodeBlobs(text string) []CodeBlock {
 				}
 			}
 		}
-		
+
 		// Handle case where file ends with code block
 		if inCodeBlock {
 			code := strings.TrimSpace(strings.Join(codeLines, "\n"))
@@ -168,7 +168,7 @@ func ParseCodeBlobs(text string) []CodeBlock {
 			}
 		}
 	}
-	
+
 	return blocks
 }
 
@@ -186,11 +186,11 @@ func TruncateContent(content string, maxLength int) string {
 	if len(content) <= maxLength {
 		return content
 	}
-	
+
 	if maxLength <= 3 {
 		return content[:maxLength]
 	}
-	
+
 	return content[:maxLength-3] + "..."
 }
 
@@ -199,18 +199,18 @@ func IsValidName(name string) bool {
 	if name == "" {
 		return false
 	}
-	
+
 	// Check if it's a valid Go identifier (similar rules to Python)
 	if !token.IsIdentifier(name) {
 		return false
 	}
-	
+
 	// Additional Python-specific checks
 	if strings.Contains(name, "__") && (strings.HasPrefix(name, "__") || strings.HasSuffix(name, "__")) {
 		// Allow dunder methods
 		return true
 	}
-	
+
 	// Check for Python keywords (basic set)
 	pythonKeywords := map[string]bool{
 		"False": true, "None": true, "True": true, "and": true, "as": true,
@@ -221,7 +221,7 @@ func IsValidName(name string) bool {
 		"or": true, "pass": true, "raise": true, "return": true, "try": true,
 		"while": true, "with": true, "yield": true,
 	}
-	
+
 	return !pythonKeywords[name]
 }
 
@@ -234,17 +234,17 @@ func MakeJSONSerializable(obj interface{}) interface{} {
 			result[k] = MakeJSONSerializable(val)
 		}
 		return result
-		
+
 	case []interface{}:
 		result := make([]interface{}, len(v))
 		for i, val := range v {
 			result[i] = MakeJSONSerializable(val)
 		}
 		return result
-		
+
 	case string, int, int64, float64, bool, nil:
 		return v
-		
+
 	default:
 		// Convert unknown types to string representation
 		return fmt.Sprintf("%v", v)
@@ -256,7 +256,7 @@ func StringToLines(text string) []string {
 	// Normalize line endings
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
-	
+
 	return strings.Split(text, "\n")
 }
 
@@ -270,7 +270,7 @@ func CleanWhitespace(text string) string {
 	// Replace multiple consecutive whitespace characters with a single space
 	re := regexp.MustCompile(`\s+`)
 	text = re.ReplaceAllString(text, " ")
-	
+
 	// Trim leading and trailing whitespace
 	return strings.TrimSpace(text)
 }
@@ -280,17 +280,17 @@ func ExtractVariableName(text string) string {
 	// Remove non-alphanumeric characters except underscores
 	re := regexp.MustCompile(`[^a-zA-Z0-9_]`)
 	cleaned := re.ReplaceAllString(text, "_")
-	
+
 	// Ensure it starts with a letter or underscore
 	if len(cleaned) > 0 && unicode.IsDigit(rune(cleaned[0])) {
 		cleaned = "_" + cleaned
 	}
-	
+
 	// Ensure it's not empty
 	if cleaned == "" {
 		cleaned = "var"
 	}
-	
+
 	return cleaned
 }
 
@@ -308,18 +308,18 @@ func ContainsAny(text string, substrings []string) bool {
 func SanitizeForLogging(content string) string {
 	// Remove potential API keys, tokens, etc.
 	patterns := []string{
-		`sk-[a-zA-Z0-9]+`,           // OpenAI-style API keys
-		`Bearer [a-zA-Z0-9_-]+`,     // Bearer tokens
+		`sk-[a-zA-Z0-9]+`,            // OpenAI-style API keys
+		`Bearer [a-zA-Z0-9_-]+`,      // Bearer tokens
 		`token[=:]\s*[a-zA-Z0-9_-]+`, // Generic tokens
 		`key[=:]\s*[a-zA-Z0-9_-]+`,   // Generic keys
 	}
-	
+
 	result := content
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		result = re.ReplaceAllString(result, "[REDACTED]")
 	}
-	
+
 	return result
 }
 
@@ -327,14 +327,14 @@ func SanitizeForLogging(content string) string {
 func FormatErrorContext(err error, context map[string]interface{}) string {
 	var parts []string
 	parts = append(parts, err.Error())
-	
+
 	if context != nil && len(context) > 0 {
 		parts = append(parts, "Context:")
 		for k, v := range context {
 			parts = append(parts, fmt.Sprintf("  %s: %v", k, v))
 		}
 	}
-	
+
 	return strings.Join(parts, "\n")
 }
 
@@ -343,7 +343,7 @@ func SafeStringConversion(value interface{}) string {
 	if value == nil {
 		return ""
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return v
@@ -367,25 +367,25 @@ func ValidateMapKeys(data map[string]interface{}, required []string) error {
 // MergeStringMaps merges multiple string maps, with later maps taking precedence
 func MergeStringMaps(maps ...map[string]string) map[string]string {
 	result := make(map[string]string)
-	
+
 	for _, m := range maps {
 		for k, v := range m {
 			result[k] = v
 		}
 	}
-	
+
 	return result
 }
 
 // FilterMap filters a map based on a predicate function
 func FilterMap(data map[string]interface{}, predicate func(string, interface{}) bool) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for k, v := range data {
 		if predicate(k, v) {
 			result[k] = v
 		}
 	}
-	
+
 	return result
 }

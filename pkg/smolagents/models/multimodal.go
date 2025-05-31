@@ -24,12 +24,12 @@ const (
 
 // MediaContent represents multimodal content
 type MediaContent struct {
-	Type        MediaType   `json:"type"`
-	Text        *string     `json:"text,omitempty"`
-	ImageURL    *ImageURL   `json:"image_url,omitempty"`
-	AudioData   *AudioData  `json:"audio_data,omitempty"`
-	VideoData   *VideoData  `json:"video_data,omitempty"`
-	Metadata    interface{} `json:"metadata,omitempty"`
+	Type      MediaType   `json:"type"`
+	Text      *string     `json:"text,omitempty"`
+	ImageURL  *ImageURL   `json:"image_url,omitempty"`
+	AudioData *AudioData  `json:"audio_data,omitempty"`
+	VideoData *VideoData  `json:"video_data,omitempty"`
+	Metadata  interface{} `json:"metadata,omitempty"`
 }
 
 // ImageURL represents an image reference
@@ -60,12 +60,12 @@ type MultimodalMessage struct {
 
 // MultimodalSupport provides utilities for handling multimodal content
 type MultimodalSupport struct {
-	MaxImageSize int64    `json:"max_image_size"`   // Maximum image size in bytes
-	MaxAudioSize int64    `json:"max_audio_size"`   // Maximum audio size in bytes
-	MaxVideoSize int64    `json:"max_video_size"`   // Maximum video size in bytes
-	ImageFormats []string `json:"image_formats"`    // Supported image formats
-	AudioFormats []string `json:"audio_formats"`    // Supported audio formats
-	VideoFormats []string `json:"video_formats"`    // Supported video formats
+	MaxImageSize int64    `json:"max_image_size"` // Maximum image size in bytes
+	MaxAudioSize int64    `json:"max_audio_size"` // Maximum audio size in bytes
+	MaxVideoSize int64    `json:"max_video_size"` // Maximum video size in bytes
+	ImageFormats []string `json:"image_formats"`  // Supported image formats
+	AudioFormats []string `json:"audio_formats"`  // Supported audio formats
+	VideoFormats []string `json:"video_formats"`  // Supported video formats
 }
 
 // NewMultimodalSupport creates a new multimodal support instance
@@ -87,35 +87,35 @@ func (ms *MultimodalSupport) LoadImageFromFile(filePath string) (*MediaContent, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	
+
 	if info.Size() > ms.MaxImageSize {
 		return nil, fmt.Errorf("image file too large: %d bytes (max: %d)", info.Size(), ms.MaxImageSize)
 	}
-	
+
 	// Check file extension
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
 	if !ms.isValidImageFormat(ext) {
 		return nil, fmt.Errorf("unsupported image format: %s", ext)
 	}
-	
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
-	
+
 	// Encode to base64
 	base64Data := base64.StdEncoding.EncodeToString(data)
-	
+
 	// Determine MIME type
 	mimeType := mime.TypeByExtension("." + ext)
 	if mimeType == "" {
 		mimeType = "image/" + ext
 	}
-	
+
 	// Create data URL
 	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, base64Data)
-	
+
 	return &MediaContent{
 		Type: MediaTypeImage,
 		ImageURL: &ImageURL{
@@ -130,12 +130,12 @@ func (ms *MultimodalSupport) LoadImageFromURL(url string, detail string) (*Media
 	if detail == "" {
 		detail = "auto"
 	}
-	
+
 	// Validate detail parameter
 	if detail != "low" && detail != "high" && detail != "auto" {
 		return nil, fmt.Errorf("invalid detail level: %s (must be 'low', 'high', or 'auto')", detail)
 	}
-	
+
 	return &MediaContent{
 		Type: MediaTypeImage,
 		ImageURL: &ImageURL{
@@ -152,26 +152,26 @@ func (ms *MultimodalSupport) LoadAudioFromFile(filePath string) (*MediaContent, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	
+
 	if info.Size() > ms.MaxAudioSize {
 		return nil, fmt.Errorf("audio file too large: %d bytes (max: %d)", info.Size(), ms.MaxAudioSize)
 	}
-	
+
 	// Check file extension
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
 	if !ms.isValidAudioFormat(ext) {
 		return nil, fmt.Errorf("unsupported audio format: %s", ext)
 	}
-	
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
-	
+
 	// Encode to base64
 	base64Data := base64.StdEncoding.EncodeToString(data)
-	
+
 	return &MediaContent{
 		Type: MediaTypeAudio,
 		AudioData: &AudioData{
@@ -189,22 +189,22 @@ func (ms *MultimodalSupport) LoadAudioFromURL(url string) (*MediaContent, error)
 		return nil, fmt.Errorf("failed to download audio: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to download audio: HTTP %d", resp.StatusCode)
 	}
-	
+
 	// Check content length
 	if resp.ContentLength > ms.MaxAudioSize {
 		return nil, fmt.Errorf("audio file too large: %d bytes (max: %d)", resp.ContentLength, ms.MaxAudioSize)
 	}
-	
+
 	// Read data
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read audio data: %w", err)
 	}
-	
+
 	// Determine format from content type or URL
 	format := "unknown"
 	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
@@ -217,10 +217,10 @@ func (ms *MultimodalSupport) LoadAudioFromURL(url string) (*MediaContent, error)
 			format = ext
 		}
 	}
-	
+
 	// Encode to base64
 	base64Data := base64.StdEncoding.EncodeToString(data)
-	
+
 	return &MediaContent{
 		Type: MediaTypeAudio,
 		AudioData: &AudioData{
@@ -238,26 +238,26 @@ func (ms *MultimodalSupport) LoadVideoFromFile(filePath string) (*MediaContent, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat file: %w", err)
 	}
-	
+
 	if info.Size() > ms.MaxVideoSize {
 		return nil, fmt.Errorf("video file too large: %d bytes (max: %d)", info.Size(), ms.MaxVideoSize)
 	}
-	
+
 	// Check file extension
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
 	if !ms.isValidVideoFormat(ext) {
 		return nil, fmt.Errorf("unsupported video format: %s", ext)
 	}
-	
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
-	
+
 	// Encode to base64
 	base64Data := base64.StdEncoding.EncodeToString(data)
-	
+
 	return &MediaContent{
 		Type: MediaTypeVideo,
 		VideoData: &VideoData{
@@ -286,19 +286,19 @@ func (ms *MultimodalSupport) CreateMultimodalMessage(role string, contents ...*M
 // ConvertToStandardFormat converts multimodal messages to standard message format
 func (ms *MultimodalSupport) ConvertToStandardFormat(messages []*MultimodalMessage) []map[string]interface{} {
 	var result []map[string]interface{}
-	
+
 	for _, msg := range messages {
 		standardMsg := map[string]interface{}{
 			"role": msg.Role,
 		}
-		
+
 		if len(msg.Content) == 1 && msg.Content[0].Type == MediaTypeText {
 			// Simple text message
 			standardMsg["content"] = *msg.Content[0].Text
 		} else {
 			// Complex multimodal message
 			var contentArray []map[string]interface{}
-			
+
 			for _, content := range msg.Content {
 				switch content.Type {
 				case MediaTypeText:
@@ -323,13 +323,13 @@ func (ms *MultimodalSupport) ConvertToStandardFormat(messages []*MultimodalMessa
 					})
 				}
 			}
-			
+
 			standardMsg["content"] = contentArray
 		}
-		
+
 		result = append(result, standardMsg)
 	}
-	
+
 	return result
 }
 
@@ -366,24 +366,24 @@ func (ms *MultimodalSupport) isValidVideoFormat(format string) bool {
 // ExtractText extracts all text content from a multimodal message
 func (ms *MultimodalSupport) ExtractText(message *MultimodalMessage) string {
 	var textParts []string
-	
+
 	for _, content := range message.Content {
 		if content.Type == MediaTypeText && content.Text != nil {
 			textParts = append(textParts, *content.Text)
 		}
 	}
-	
+
 	return strings.Join(textParts, " ")
 }
 
 // GetMediaCount returns the count of different media types in a message
 func (ms *MultimodalSupport) GetMediaCount(message *MultimodalMessage) map[MediaType]int {
 	counts := make(map[MediaType]int)
-	
+
 	for _, content := range message.Content {
 		counts[content.Type]++
 	}
-	
+
 	return counts
 }
 
@@ -392,17 +392,17 @@ func (ms *MultimodalSupport) ValidateMessage(message *MultimodalMessage) error {
 	if message.Role == "" {
 		return fmt.Errorf("message role cannot be empty")
 	}
-	
+
 	if len(message.Content) == 0 {
 		return fmt.Errorf("message content cannot be empty")
 	}
-	
+
 	for i, content := range message.Content {
 		if err := ms.validateContent(content); err != nil {
 			return fmt.Errorf("content[%d]: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -437,7 +437,7 @@ func (ms *MultimodalSupport) validateContent(content *MediaContent) error {
 	default:
 		return fmt.Errorf("unsupported content type: %s", content.Type)
 	}
-	
+
 	return nil
 }
 
@@ -446,14 +446,14 @@ func (ms *MultimodalSupport) CompressImage(content *MediaContent, quality int) (
 	if content.Type != MediaTypeImage {
 		return nil, fmt.Errorf("content is not an image")
 	}
-	
+
 	// This is a placeholder implementation
 	// In a real implementation, this would:
 	// 1. Decode the base64 image data
 	// 2. Compress the image using libraries like "image/jpeg" or third-party libraries
 	// 3. Re-encode to base64
 	// 4. Return the compressed version
-	
+
 	return content, nil // Return original for now
 }
 
@@ -462,14 +462,14 @@ func (ms *MultimodalSupport) GenerateImageThumbnail(content *MediaContent, width
 	if content.Type != MediaTypeImage {
 		return nil, fmt.Errorf("content is not an image")
 	}
-	
+
 	// This is a placeholder implementation
 	// In a real implementation, this would:
 	// 1. Decode the base64 image data
 	// 2. Resize the image to the specified dimensions
 	// 3. Re-encode to base64
 	// 4. Return the thumbnail
-	
+
 	return content, nil // Return original for now
 }
 

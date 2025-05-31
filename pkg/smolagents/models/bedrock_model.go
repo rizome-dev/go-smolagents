@@ -17,28 +17,28 @@ type BedrockClient interface {
 // AmazonBedrockModel represents a model using Amazon Bedrock API
 type AmazonBedrockModel struct {
 	*BaseModel
-	Client                  BedrockClient         `json:"-"`
-	ClientKwargs            map[string]interface{} `json:"client_kwargs"`
-	CustomRoleConversions   map[string]string     `json:"custom_role_conversions"`
-	InferenceConfig         map[string]interface{} `json:"inference_config"`
-	GuardrailConfig         map[string]interface{} `json:"guardrail_config"`
-	AdditionalModelFields   map[string]interface{} `json:"additional_model_fields"`
+	Client                BedrockClient          `json:"-"`
+	ClientKwargs          map[string]interface{} `json:"client_kwargs"`
+	CustomRoleConversions map[string]string      `json:"custom_role_conversions"`
+	InferenceConfig       map[string]interface{} `json:"inference_config"`
+	GuardrailConfig       map[string]interface{} `json:"guardrail_config"`
+	AdditionalModelFields map[string]interface{} `json:"additional_model_fields"`
 }
 
 // NewAmazonBedrockModel creates a new Amazon Bedrock model
 func NewAmazonBedrockModel(modelID string, options map[string]interface{}) *AmazonBedrockModel {
 	base := NewBaseModel(modelID, options)
-	
+
 	// Bedrock only supports `assistant` and `user` roles
 	// Many Bedrock models do not allow conversations to start with the `assistant` role,
 	// so the default is set to `user/user`
 	defaultRoleConversions := map[string]string{
 		"system":        "user",
-		"assistant":     "user", 
+		"assistant":     "user",
 		"tool-call":     "user",
 		"tool-response": "user",
 	}
-	
+
 	model := &AmazonBedrockModel{
 		BaseModel:             base,
 		ClientKwargs:          make(map[string]interface{}),
@@ -47,7 +47,7 @@ func NewAmazonBedrockModel(modelID string, options map[string]interface{}) *Amaz
 		GuardrailConfig:       make(map[string]interface{}),
 		AdditionalModelFields: make(map[string]interface{}),
 	}
-	
+
 	if options != nil {
 		if clientKwargs, ok := options["client_kwargs"].(map[string]interface{}); ok {
 			model.ClientKwargs = clientKwargs
@@ -68,12 +68,12 @@ func NewAmazonBedrockModel(modelID string, options map[string]interface{}) *Amaz
 			model.Client = client
 		}
 	}
-	
+
 	// Create default client if none provided
 	if model.Client == nil {
 		model.Client = NewDefaultBedrockClient(model.ClientKwargs)
 	}
-	
+
 	return model
 }
 
@@ -84,13 +84,13 @@ func (bm *AmazonBedrockModel) Generate(messages []interface{}, options *Generate
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare completion kwargs: %w", err)
 	}
-	
+
 	// Make the API call
 	response, err := bm.Client.Converse(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("Bedrock API call failed: %w", err)
 	}
-	
+
 	// Parse the response
 	return bm.parseResponse(response)
 }
@@ -102,27 +102,27 @@ func (bm *AmazonBedrockModel) GenerateStream(messages []interface{}, options *Ge
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare completion kwargs: %w", err)
 	}
-	
+
 	// Create the stream channel
 	streamChan := make(chan *ChatMessageStreamDelta, 100)
-	
+
 	// Start streaming in a goroutine
 	go func() {
 		defer close(streamChan)
-		
+
 		// Make streaming API call
 		responseChan, err := bm.Client.ConverseStream(kwargs)
 		if err != nil {
 			return
 		}
-		
+
 		for event := range responseChan {
 			if delta := bm.parseStreamDelta(event); delta != nil {
 				streamChan <- delta
 			}
 		}
 	}()
-	
+
 	return streamChan, nil
 }
 
@@ -149,13 +149,13 @@ func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, op
 	for k, v := range bm.CustomRoleConversions {
 		roleConversions[MessageRole(k)] = MessageRole(v)
 	}
-	
+
 	// Clean and convert messages
 	cleanMessages, err := GetCleanMessageList(messages, roleConversions, true, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Remove type field from content as Bedrock doesn't support it
 	for _, message := range cleanMessages {
 		if content, ok := message["content"].([]interface{}); ok {
@@ -166,13 +166,13 @@ func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, op
 			}
 		}
 	}
-	
+
 	// Prepare base parameters
 	kwargs := map[string]interface{}{
 		"modelId":  bm.ModelID,
 		"messages": cleanMessages,
 	}
-	
+
 	// Add inference configuration
 	if len(bm.InferenceConfig) > 0 {
 		kwargs["inferenceConfig"] = bm.InferenceConfig
@@ -194,17 +194,17 @@ func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, op
 			kwargs["inferenceConfig"] = inferenceConfig
 		}
 	}
-	
+
 	// Add guardrail configuration
 	if len(bm.GuardrailConfig) > 0 {
 		kwargs["guardrailConfig"] = bm.GuardrailConfig
 	}
-	
+
 	// Add additional model fields
 	for k, v := range bm.AdditionalModelFields {
 		kwargs[k] = v
 	}
-	
+
 	return kwargs, nil
 }
 
@@ -214,12 +214,12 @@ func (bm *AmazonBedrockModel) parseResponse(response map[string]interface{}) (*C
 	if !ok {
 		return nil, fmt.Errorf("invalid response format: no output found")
 	}
-	
+
 	messageData, ok := output["message"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid response format: no message found")
 	}
-	
+
 	// Extract content from the first content item
 	if content, ok := messageData["content"].([]interface{}); ok && len(content) > 0 {
 		if firstContent, ok := content[0].(map[string]interface{}); ok {
@@ -228,13 +228,13 @@ func (bm *AmazonBedrockModel) parseResponse(response map[string]interface{}) (*C
 			}
 		}
 	}
-	
+
 	message := &ChatMessage{}
 	err := message.FromDict(messageData, response, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message: %w", err)
 	}
-	
+
 	// Parse token usage if available
 	if usage, ok := response["usage"].(map[string]interface{}); ok {
 		if inputTokens, ok := usage["inputTokens"].(float64); ok {
@@ -243,10 +243,10 @@ func (bm *AmazonBedrockModel) parseResponse(response map[string]interface{}) (*C
 			}
 		}
 	}
-	
+
 	// Store raw response
 	message.Raw = response
-	
+
 	return message, nil
 }
 
@@ -261,7 +261,7 @@ func (bm *AmazonBedrockModel) parseStreamDelta(event map[string]interface{}) *Ch
 			}
 		}
 	}
-	
+
 	// Check for usage information
 	if metadata, ok := event["metadata"].(map[string]interface{}); ok {
 		if usage, ok := metadata["usage"].(map[string]interface{}); ok {
@@ -274,7 +274,7 @@ func (bm *AmazonBedrockModel) parseStreamDelta(event map[string]interface{}) *Ch
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -298,10 +298,10 @@ func (dbc *DefaultBedrockClient) Converse(input map[string]interface{}) (map[str
 	// 2. Call the Converse API with proper authentication
 	// 3. Handle AWS-specific error formats
 	// 4. Return the parsed response
-	
+
 	// Extract model ID for response
 	modelID, _ := input["modelId"].(string)
-	
+
 	// Create placeholder response in Bedrock format
 	return map[string]interface{}{
 		"ResponseMetadata": map[string]interface{}{
@@ -334,12 +334,12 @@ func (dbc *DefaultBedrockClient) ConverseStream(input map[string]interface{}) (<
 	// 2. Call the ConverseStream API with proper authentication
 	// 3. Process the streaming response events
 	// 4. Return a channel of streaming events
-	
+
 	eventChan := make(chan map[string]interface{}, 10)
-	
+
 	go func() {
 		defer close(eventChan)
-		
+
 		// Send sample streaming events
 		words := []string{"This", " is", " a", " streaming", " response", " from", " Bedrock", "."}
 		for _, word := range words {
@@ -351,7 +351,7 @@ func (dbc *DefaultBedrockClient) ConverseStream(input map[string]interface{}) (<
 				},
 			}
 		}
-		
+
 		// Send final usage information
 		eventChan <- map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -362,7 +362,7 @@ func (dbc *DefaultBedrockClient) ConverseStream(input map[string]interface{}) (<
 			},
 		}
 	}()
-	
+
 	return eventChan, nil
 }
 
@@ -420,7 +420,7 @@ func GetBedrockModelDefaults(modelID string) map[string]interface{} {
 		}
 		return result
 	}
-	
+
 	// Return generic defaults if model not found in registry
 	return map[string]interface{}{
 		"max_tokens":  2048,

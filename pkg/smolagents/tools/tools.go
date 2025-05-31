@@ -53,7 +53,7 @@ func NewToolInput(inputType, description string, nullable ...bool) *ToolInput {
 	if len(nullable) > 0 {
 		isNullable = nullable[0]
 	}
-	
+
 	return &ToolInput{
 		Type:        inputType,
 		Description: description,
@@ -67,19 +67,19 @@ func (ti *ToolInput) ToDict() map[string]interface{} {
 		"type":        ti.Type,
 		"description": ti.Description,
 	}
-	
+
 	if ti.Nullable {
 		result["nullable"] = ti.Nullable
 	}
-	
+
 	if ti.Required {
 		result["required"] = ti.Required
 	}
-	
+
 	if ti.Default != nil {
 		result["default"] = ti.Default
 	}
-	
+
 	return result
 }
 
@@ -87,25 +87,25 @@ func (ti *ToolInput) ToDict() map[string]interface{} {
 type Tool interface {
 	// Core execution method - must be implemented by all tools
 	Forward(args ...interface{}) (interface{}, error)
-	
+
 	// Entry point that handles input/output sanitization
 	Call(args ...interface{}) (interface{}, error)
-	
+
 	// Lazy initialization for expensive operations
 	Setup() error
-	
+
 	// Validates tool configuration
 	Validate() error
-	
+
 	// Serialization methods
 	ToDict() map[string]interface{}
-	
+
 	// Metadata accessors
 	GetName() string
 	GetDescription() string
 	GetInputs() map[string]*ToolInput
 	GetOutputType() string
-	
+
 	// State management
 	IsSetup() bool
 	SetSetup(bool)
@@ -117,10 +117,10 @@ type BaseTool struct {
 	Description string                `json:"description"`
 	Inputs      map[string]*ToolInput `json:"inputs"`
 	OutputType  string                `json:"output_type"`
-	
+
 	// Internal state
 	isSetup bool
-	
+
 	// Implementation function (for function-based tools)
 	ForwardFunc func(args ...interface{}) (interface{}, error) `json:"-"`
 }
@@ -130,7 +130,7 @@ func NewBaseTool(name, description string, inputs map[string]*ToolInput, outputT
 	if inputs == nil {
 		inputs = make(map[string]*ToolInput)
 	}
-	
+
 	return &BaseTool{
 		Name:        name,
 		Description: description,
@@ -184,41 +184,41 @@ func (bt *BaseTool) Validate() error {
 	if bt.Name == "" {
 		return fmt.Errorf("tool name cannot be empty")
 	}
-	
+
 	if !utils.IsValidName(bt.Name) {
 		return fmt.Errorf("tool name '%s' is not a valid identifier", bt.Name)
 	}
-	
+
 	// Validate description
 	if bt.Description == "" {
 		return fmt.Errorf("tool description cannot be empty")
 	}
-	
+
 	// Validate output type
 	if bt.OutputType == "" {
 		return fmt.Errorf("tool output_type cannot be empty")
 	}
-	
+
 	if !isValidType(bt.OutputType) {
 		return fmt.Errorf("invalid output_type '%s', must be one of: %v", bt.OutputType, AuthorizedTypes)
 	}
-	
+
 	// Validate inputs
 	for name, input := range bt.Inputs {
 		if !utils.IsValidName(name) {
 			return fmt.Errorf("input name '%s' is not a valid identifier", name)
 		}
-		
+
 		if !isValidType(input.Type) {
-			return fmt.Errorf("invalid input type '%s' for parameter '%s', must be one of: %v", 
+			return fmt.Errorf("invalid input type '%s' for parameter '%s', must be one of: %v",
 				input.Type, name, AuthorizedTypes)
 		}
-		
+
 		if input.Description == "" {
 			return fmt.Errorf("input '%s' must have a description", name)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -238,10 +238,10 @@ func (bt *BaseTool) Call(args ...interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("tool setup failed: %w", err)
 		}
 	}
-	
+
 	// Convert args to map format expected by validation
 	argsMap := make(map[string]interface{})
-	
+
 	// If args provided as a single map, use it directly
 	if len(args) == 1 {
 		if argMap, ok := args[0].(map[string]interface{}); ok {
@@ -262,18 +262,18 @@ func (bt *BaseTool) Call(args ...interface{}) (interface{}, error) {
 			}
 		}
 	}
-	
+
 	// Handle agent input types
 	_, convertedMap := agent_types.HandleAgentInputTypes(nil, argsMap)
-	
+
 	if err := bt.validateInputs(convertedMap); err != nil {
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
-	
+
 	// Call the forward method
 	var result interface{}
 	var err error
-	
+
 	// Use convertedMap for actual argument handling
 	if len(convertedMap) == 0 {
 		result, err = bt.Forward()
@@ -294,11 +294,11 @@ func (bt *BaseTool) Call(args ...interface{}) (interface{}, error) {
 		}
 		result, err = bt.Forward(argSlice...)
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Handle agent output types
 	return agent_types.HandleAgentOutputTypes(result, bt.OutputType), nil
 }
@@ -313,7 +313,7 @@ func (bt *BaseTool) ToDict() map[string]interface{} {
 			"nullable":    input.Nullable,
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"name":        bt.Name,
 		"description": bt.Description,
@@ -335,27 +335,27 @@ func (bt *BaseTool) getInputNames() []string {
 func (bt *BaseTool) ToOpenAITool() map[string]interface{} {
 	properties := make(map[string]interface{})
 	required := make([]string, 0)
-	
+
 	for name, input := range bt.Inputs {
 		properties[name] = map[string]interface{}{
 			"type":        input.Type,
 			"description": input.Description,
 		}
-		
+
 		if input.Required {
 			required = append(required, name)
 		}
 	}
-	
+
 	parameters := map[string]interface{}{
 		"type":       "object",
 		"properties": properties,
 	}
-	
+
 	if len(required) > 0 {
 		parameters["required"] = required
 	}
-	
+
 	return map[string]interface{}{
 		"type": "function",
 		"function": map[string]interface{}{
@@ -382,14 +382,14 @@ func (bt *BaseTool) validateInputs(args map[string]interface{}) error {
 	// Check for required parameters
 	for name, input := range bt.Inputs {
 		value, exists := args[name]
-		
+
 		if !exists {
 			if !input.Nullable {
 				return fmt.Errorf("required parameter '%s' is missing", name)
 			}
 			continue
 		}
-		
+
 		// Check for null values
 		if value == nil {
 			if !input.Nullable {
@@ -397,20 +397,20 @@ func (bt *BaseTool) validateInputs(args map[string]interface{}) error {
 			}
 			continue
 		}
-		
+
 		// Type validation
 		if err := validateValueType(name, value, input.Type); err != nil {
 			return err
 		}
 	}
-	
+
 	// Check for unknown parameters
 	for name := range args {
 		if _, exists := bt.Inputs[name]; !exists {
 			return fmt.Errorf("unknown parameter '%s'", name)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -421,12 +421,12 @@ func validateValueType(name string, value interface{}, expectedType string) erro
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("parameter '%s' must be a string, got %T", name, value)
 		}
-		
+
 	case "boolean":
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("parameter '%s' must be a boolean, got %T", name, value)
 		}
-		
+
 	case "integer":
 		switch value.(type) {
 		case int, int32, int64:
@@ -439,7 +439,7 @@ func validateValueType(name string, value interface{}, expectedType string) erro
 		default:
 			return fmt.Errorf("parameter '%s' must be an integer, got %T", name, value)
 		}
-		
+
 	case "number":
 		switch value.(type) {
 		case int, int32, int64, float32, float64:
@@ -447,18 +447,18 @@ func validateValueType(name string, value interface{}, expectedType string) erro
 		default:
 			return fmt.Errorf("parameter '%s' must be a number, got %T", name, value)
 		}
-		
+
 	case "array":
 		rv := reflect.ValueOf(value)
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
 			return fmt.Errorf("parameter '%s' must be an array, got %T", name, value)
 		}
-		
+
 	case "object":
 		if _, ok := value.(map[string]interface{}); !ok {
 			return fmt.Errorf("parameter '%s' must be an object, got %T", name, value)
 		}
-		
+
 	case "image":
 		// Check if it's an AgentImage or compatible type
 		switch value.(type) {
@@ -467,7 +467,7 @@ func validateValueType(name string, value interface{}, expectedType string) erro
 		default:
 			return fmt.Errorf("parameter '%s' must be an image, got %T", name, value)
 		}
-		
+
 	case "audio":
 		// Check if it's an AgentAudio or compatible type
 		switch value.(type) {
@@ -476,14 +476,14 @@ func validateValueType(name string, value interface{}, expectedType string) erro
 		default:
 			return fmt.Errorf("parameter '%s' must be audio, got %T", name, value)
 		}
-		
+
 	case "any", "null":
 		// Any type is allowed
-		
+
 	default:
 		return fmt.Errorf("unknown type constraint '%s' for parameter '%s'", expectedType, name)
 	}
-	
+
 	return nil
 }
 
@@ -512,20 +512,20 @@ func NewFunctionTool(
 	function interface{},
 ) (*FunctionTool, error) {
 	baseTool := NewBaseTool(name, description, inputs, outputType)
-	
+
 	ft := &FunctionTool{
 		BaseTool: baseTool,
 		function: function,
 	}
-	
+
 	// Set up the forward function to call the provided function
 	ft.ForwardFunc = ft.callFunction
-	
+
 	// Validate the tool
 	if err := ft.Validate(); err != nil {
 		return nil, fmt.Errorf("tool validation failed: %w", err)
 	}
-	
+
 	return ft, nil
 }
 
@@ -534,17 +534,17 @@ func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 	if ft.function == nil {
 		return nil, fmt.Errorf("no function provided")
 	}
-	
+
 	funcValue := reflect.ValueOf(ft.function)
 	funcType := funcValue.Type()
-	
+
 	if funcType.Kind() != reflect.Func {
 		return nil, fmt.Errorf("provided function is not a function")
 	}
-	
+
 	// Prepare arguments for function call
 	var callArgs []reflect.Value
-	
+
 	numIn := funcType.NumIn()
 	if numIn > 0 {
 		if len(args) == 1 {
@@ -572,25 +572,25 @@ func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 				}
 			}
 		}
-		
+
 		// Pad with zero values if not enough arguments
 		for len(callArgs) < numIn {
 			callArgs = append(callArgs, reflect.Zero(funcType.In(len(callArgs))))
 		}
 	}
-	
+
 	// Call the function
 	results := funcValue.Call(callArgs)
-	
+
 	// Handle return values
 	if len(results) == 0 {
 		return nil, nil
 	}
-	
+
 	if len(results) == 1 {
 		return results[0].Interface(), nil
 	}
-	
+
 	// Multiple return values - check if last one is an error
 	lastResult := results[len(results)-1]
 	if lastResult.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
@@ -598,7 +598,7 @@ func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 		if !lastResult.IsNil() {
 			return nil, lastResult.Interface().(error)
 		}
-		
+
 		// Return other values
 		if len(results) == 2 {
 			return results[0].Interface(), nil
@@ -611,7 +611,7 @@ func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 			return retVals, nil
 		}
 	}
-	
+
 	// Multiple return values, none are errors
 	retVals := make([]interface{}, len(results))
 	for i, result := range results {
@@ -632,7 +632,7 @@ func (ft *FunctionTool) ToDict() map[string]interface{} {
 // CreateSimpleTool creates a simple tool with basic validation
 func CreateSimpleTool(name, description, outputType string, function interface{}) (*FunctionTool, error) {
 	inputs := make(map[string]*ToolInput)
-	
+
 	// Try to infer inputs from function signature
 	if function != nil {
 		funcType := reflect.TypeOf(function)
@@ -641,18 +641,18 @@ func CreateSimpleTool(name, description, outputType string, function interface{}
 			for i := 0; i < numIn; i++ {
 				paramType := funcType.In(i)
 				paramName := fmt.Sprintf("param_%d", i)
-				
+
 				// Convert Go type to schema type
 				schemaType := "any"
 				if goType, exists := ConversionDict[paramType.String()]; exists {
 					schemaType = goType
 				}
-				
+
 				inputs[paramName] = NewToolInput(schemaType, fmt.Sprintf("Parameter %d", i))
 			}
 		}
 	}
-	
+
 	return NewFunctionTool(name, description, inputs, outputType, function)
 }
 
@@ -662,17 +662,17 @@ func ToolFromMap(toolMap map[string]interface{}) (Tool, error) {
 	if !ok {
 		return nil, fmt.Errorf("tool name is required")
 	}
-	
+
 	description, ok := toolMap["description"].(string)
 	if !ok {
 		return nil, fmt.Errorf("tool description is required")
 	}
-	
+
 	outputType, ok := toolMap["output_type"].(string)
 	if !ok {
 		outputType = "any"
 	}
-	
+
 	inputs := make(map[string]*ToolInput)
 	if inputsMap, ok := toolMap["inputs"].(map[string]interface{}); ok {
 		for inputName, inputData := range inputsMap {
@@ -680,7 +680,7 @@ func ToolFromMap(toolMap map[string]interface{}) (Tool, error) {
 				inputType, _ := inputMap["type"].(string)
 				inputDesc, _ := inputMap["description"].(string)
 				nullable, _ := inputMap["nullable"].(bool)
-				
+
 				inputs[inputName] = &ToolInput{
 					Type:        inputType,
 					Description: inputDesc,
@@ -689,7 +689,7 @@ func ToolFromMap(toolMap map[string]interface{}) (Tool, error) {
 			}
 		}
 	}
-	
+
 	return NewBaseTool(name, description, inputs, outputType), nil
 }
 
@@ -697,18 +697,18 @@ func ToolFromMap(toolMap map[string]interface{}) (Tool, error) {
 func GetToolJSONSchema(tool Tool) map[string]interface{} {
 	properties := make(map[string]interface{})
 	required := []string{}
-	
+
 	for name, input := range tool.GetInputs() {
 		properties[name] = map[string]interface{}{
 			"type":        input.Type,
 			"description": input.Description,
 		}
-		
+
 		if !input.Nullable {
 			required = append(required, name)
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"type": "function",
 		"function": map[string]interface{}{

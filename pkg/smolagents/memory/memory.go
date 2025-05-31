@@ -2,7 +2,7 @@
 //
 // This includes step-by-step tracking of agent actions, tool calls, planning steps,
 // and conversation history management.
-// 
+//
 // This is a 1-to-1 port of the Python smolagents.memory module.
 package memory
 
@@ -12,19 +12,19 @@ import (
 	"image"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
 	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/models"
+	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
 )
 
 // Message represents a single message in the conversation
 type Message struct {
-	Role      models.MessageRole     `json:"role"`
-	Content   []map[string]interface{} `json:"content"`
-	Name      string                 `json:"name,omitempty"`
-	ToolCalls []ToolCall             `json:"tool_calls,omitempty"`
-	ToolCallID string                `json:"tool_call_id,omitempty"`
-	Images    []image.Image          `json:"images,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Role       models.MessageRole       `json:"role"`
+	Content    []map[string]interface{} `json:"content"`
+	Name       string                   `json:"name,omitempty"`
+	ToolCalls  []ToolCall               `json:"tool_calls,omitempty"`
+	ToolCallID string                   `json:"tool_call_id,omitempty"`
+	Images     []image.Image            `json:"images,omitempty"`
+	Metadata   map[string]interface{}   `json:"metadata,omitempty"`
 }
 
 // NewMessage creates a new message with the specified role and content
@@ -47,11 +47,11 @@ func (m *Message) ToDict() map[string]interface{} {
 		"role":    string(m.Role),
 		"content": m.Content,
 	}
-	
+
 	if m.Name != "" {
 		result["name"] = m.Name
 	}
-	
+
 	if len(m.ToolCalls) > 0 {
 		toolCalls := make([]map[string]interface{}, len(m.ToolCalls))
 		for i, tc := range m.ToolCalls {
@@ -59,15 +59,15 @@ func (m *Message) ToDict() map[string]interface{} {
 		}
 		result["tool_calls"] = toolCalls
 	}
-	
+
 	if m.ToolCallID != "" {
 		result["tool_call_id"] = m.ToolCallID
 	}
-	
+
 	if len(m.Metadata) > 0 {
 		result["metadata"] = m.Metadata
 	}
-	
+
 	return result
 }
 
@@ -105,8 +105,8 @@ func (tu *TokenUsage) Add(other *TokenUsage) {
 
 // Timing represents timing information for operations
 type Timing struct {
-	StartTime time.Time  `json:"start_time"`
-	EndTime   *time.Time `json:"end_time,omitempty"`
+	StartTime time.Time      `json:"start_time"`
+	EndTime   *time.Time     `json:"end_time,omitempty"`
 	Duration  *time.Duration `json:"duration,omitempty"`
 }
 
@@ -129,27 +129,27 @@ func (t *Timing) End() {
 type MemoryStep interface {
 	// ToMessages converts the step to a list of messages for model consumption
 	ToMessages(summaryMode bool) ([]Message, error)
-	
+
 	// ToDict converts the step to a dictionary representation
 	ToDict() (map[string]interface{}, error)
-	
+
 	// GetType returns the type identifier for this step
 	GetType() string
 }
 
 // ActionStep represents an action taken by the agent (tool calls, model interactions)
 type ActionStep struct {
-	StepNumber         int                       `json:"step_number"`
-	Timing             monitoring.Timing         `json:"timing"`
-	ModelInputMessages []Message                 `json:"model_input_messages,omitempty"`
-	ToolCalls          []ToolCall                `json:"tool_calls,omitempty"`
-	Error              error                     `json:"error,omitempty"`
-	ModelOutputMessage *models.ChatMessage       `json:"model_output_message,omitempty"`
-	ModelOutput        string                    `json:"model_output,omitempty"`
-	Observations       string                    `json:"observations,omitempty"`
-	ObservationImages  []interface{}             `json:"observation_images,omitempty"`
-	ActionOutput       interface{}               `json:"action_output,omitempty"`
-	TokenUsage         *monitoring.TokenUsage    `json:"token_usage,omitempty"`
+	StepNumber         int                    `json:"step_number"`
+	Timing             monitoring.Timing      `json:"timing"`
+	ModelInputMessages []Message              `json:"model_input_messages,omitempty"`
+	ToolCalls          []ToolCall             `json:"tool_calls,omitempty"`
+	Error              error                  `json:"error,omitempty"`
+	ModelOutputMessage *models.ChatMessage    `json:"model_output_message,omitempty"`
+	ModelOutput        string                 `json:"model_output,omitempty"`
+	Observations       string                 `json:"observations,omitempty"`
+	ObservationImages  []interface{}          `json:"observation_images,omitempty"`
+	ActionOutput       interface{}            `json:"action_output,omitempty"`
+	TokenUsage         *monitoring.TokenUsage `json:"token_usage,omitempty"`
 }
 
 // NewActionStep creates a new action step
@@ -158,7 +158,7 @@ func NewActionStep(stepNumber int, startTime ...time.Time) *ActionStep {
 	if len(startTime) > 0 {
 		start = startTime[0]
 	}
-	
+
 	return &ActionStep{
 		StepNumber: stepNumber,
 		Timing:     monitoring.Timing{StartTime: start},
@@ -175,29 +175,29 @@ func NewActionStepWithImages(stepNumber int, startTime time.Time, images []inter
 }
 
 // Getter and setter methods for ActionStep
-func (as *ActionStep) GetStepNumber() int                           { return as.StepNumber }
-func (as *ActionStep) GetTiming() monitoring.Timing                 { return as.Timing }
-func (as *ActionStep) GetModelInputMessages() []Message             { return as.ModelInputMessages }
-func (as *ActionStep) GetToolCalls() []ToolCall                     { return as.ToolCalls }
-func (as *ActionStep) GetError() error                              { return as.Error }
-func (as *ActionStep) GetModelOutputMessage() *models.ChatMessage   { return as.ModelOutputMessage }
-func (as *ActionStep) GetModelOutput() string                       { return as.ModelOutput }
-func (as *ActionStep) GetObservations() string                      { return as.Observations }
-func (as *ActionStep) GetObservationImages() []interface{}          { return as.ObservationImages }
-func (as *ActionStep) GetActionOutput() interface{}                 { return as.ActionOutput }
-func (as *ActionStep) GetTokenUsage() *monitoring.TokenUsage        { return as.TokenUsage }
+func (as *ActionStep) GetStepNumber() int                         { return as.StepNumber }
+func (as *ActionStep) GetTiming() monitoring.Timing               { return as.Timing }
+func (as *ActionStep) GetModelInputMessages() []Message           { return as.ModelInputMessages }
+func (as *ActionStep) GetToolCalls() []ToolCall                   { return as.ToolCalls }
+func (as *ActionStep) GetError() error                            { return as.Error }
+func (as *ActionStep) GetModelOutputMessage() *models.ChatMessage { return as.ModelOutputMessage }
+func (as *ActionStep) GetModelOutput() string                     { return as.ModelOutput }
+func (as *ActionStep) GetObservations() string                    { return as.Observations }
+func (as *ActionStep) GetObservationImages() []interface{}        { return as.ObservationImages }
+func (as *ActionStep) GetActionOutput() interface{}               { return as.ActionOutput }
+func (as *ActionStep) GetTokenUsage() *monitoring.TokenUsage      { return as.TokenUsage }
 
-func (as *ActionStep) SetStepNumber(n int)                                 { as.StepNumber = n }
-func (as *ActionStep) SetTiming(t monitoring.Timing)                       { as.Timing = t }
-func (as *ActionStep) SetModelInputMessages(msgs []Message)                { as.ModelInputMessages = msgs }
-func (as *ActionStep) SetToolCalls(calls []ToolCall)                       { as.ToolCalls = calls }
-func (as *ActionStep) SetError(err error)                                  { as.Error = err }
-func (as *ActionStep) SetModelOutputMessage(msg *models.ChatMessage)       { as.ModelOutputMessage = msg }
-func (as *ActionStep) SetModelOutput(output string)                        { as.ModelOutput = output }
-func (as *ActionStep) SetObservations(obs string)                          { as.Observations = obs }
-func (as *ActionStep) SetObservationImages(images []interface{})           { as.ObservationImages = images }
-func (as *ActionStep) SetActionOutput(output interface{})                  { as.ActionOutput = output }
-func (as *ActionStep) SetTokenUsage(usage *monitoring.TokenUsage)          { as.TokenUsage = usage }
+func (as *ActionStep) SetStepNumber(n int)                           { as.StepNumber = n }
+func (as *ActionStep) SetTiming(t monitoring.Timing)                 { as.Timing = t }
+func (as *ActionStep) SetModelInputMessages(msgs []Message)          { as.ModelInputMessages = msgs }
+func (as *ActionStep) SetToolCalls(calls []ToolCall)                 { as.ToolCalls = calls }
+func (as *ActionStep) SetError(err error)                            { as.Error = err }
+func (as *ActionStep) SetModelOutputMessage(msg *models.ChatMessage) { as.ModelOutputMessage = msg }
+func (as *ActionStep) SetModelOutput(output string)                  { as.ModelOutput = output }
+func (as *ActionStep) SetObservations(obs string)                    { as.Observations = obs }
+func (as *ActionStep) SetObservationImages(images []interface{})     { as.ObservationImages = images }
+func (as *ActionStep) SetActionOutput(output interface{})            { as.ActionOutput = output }
+func (as *ActionStep) SetTokenUsage(usage *monitoring.TokenUsage)    { as.TokenUsage = usage }
 
 // GetType implements MemoryStep
 func (as *ActionStep) GetType() string {
@@ -207,12 +207,12 @@ func (as *ActionStep) GetType() string {
 // ToMessages implements MemoryStep
 func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 	var messages []Message
-	
+
 	// Add model output if available and not in summary mode
 	if as.ModelOutput != "" && !summaryMode {
 		messages = append(messages, *NewMessage(models.RoleAssistant, as.ModelOutput))
 	}
-	
+
 	// Add tool calls if any
 	if len(as.ToolCalls) > 0 {
 		// For tool calling agents, create a tool call message
@@ -222,7 +222,7 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 		}
 		messages = append(messages, *NewMessage(models.RoleToolCall, toolCallContent))
 	}
-	
+
 	// Add observation images if any
 	if len(as.ObservationImages) > 0 {
 		// Handle images - simplified for now
@@ -230,27 +230,27 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 		// TODO: Set images properly when image handling is implemented
 		messages = append(messages, *imageMessage)
 	}
-	
+
 	// Add observations if any
 	if as.Observations != "" {
 		messages = append(messages, *NewMessage(models.RoleToolResponse, "Observation:\n"+as.Observations))
 	}
-	
+
 	// Add error if any
 	if as.Error != nil {
-		errorText := "Error:\n" + as.Error.Error() + 
+		errorText := "Error:\n" + as.Error.Error() +
 			"\nNow let's retry: take care not to repeat previous errors! " +
 			"If you have retried several times, try a completely different approach.\n"
-		
+
 		messageContent := ""
 		if len(as.ToolCalls) > 0 {
 			messageContent = fmt.Sprintf("Call id: %s\n", as.ToolCalls[0].ID)
 		}
 		messageContent += errorText
-		
+
 		messages = append(messages, *NewMessage(models.RoleToolResponse, messageContent))
 	}
-	
+
 	return messages, nil
 }
 
@@ -260,7 +260,7 @@ func (as *ActionStep) ToDict() (map[string]interface{}, error) {
 		"type":        as.GetType(),
 		"step_number": as.StepNumber,
 	}
-	
+
 	// Add timing info
 	result["timing"] = map[string]interface{}{
 		"start_time": as.Timing.StartTime,
@@ -268,7 +268,7 @@ func (as *ActionStep) ToDict() (map[string]interface{}, error) {
 	if as.Timing.EndTime != nil && !as.Timing.EndTime.IsZero() {
 		result["timing"].(map[string]interface{})["end_time"] = *as.Timing.EndTime
 	}
-	
+
 	if len(as.ToolCalls) > 0 {
 		toolCalls := make([]map[string]interface{}, len(as.ToolCalls))
 		for i, tc := range as.ToolCalls {
@@ -276,49 +276,49 @@ func (as *ActionStep) ToDict() (map[string]interface{}, error) {
 		}
 		result["tool_calls"] = toolCalls
 	}
-	
+
 	if len(as.ModelInputMessages) > 0 {
 		result["model_input_messages"] = as.ModelInputMessages
 	}
-	
+
 	if as.ModelOutput != "" {
 		result["model_output"] = as.ModelOutput
 	}
-	
+
 	if as.ModelOutputMessage != nil {
 		msgDict := as.ModelOutputMessage.ToDict()
 		result["model_output_message"] = msgDict
 	}
-	
+
 	if as.Observations != "" {
 		result["observations"] = as.Observations
 	}
-	
+
 	if as.ActionOutput != nil {
 		result["action_output"] = as.ActionOutput
 	}
-	
+
 	if as.Error != nil {
 		result["error"] = as.Error.Error()
 	}
-	
+
 	if as.TokenUsage != nil {
 		result["token_usage"] = map[string]interface{}{
 			"input_tokens":  as.TokenUsage.InputTokens,
 			"output_tokens": as.TokenUsage.OutputTokens,
 		}
 	}
-	
+
 	return result, nil
 }
 
 // PlanningStep represents a planning step by the agent
 type PlanningStep struct {
-	ModelInputMessages []Message                  `json:"model_input_messages"`
-	ModelOutputMessage models.ChatMessage         `json:"model_output_message"`
-	Plan               string                     `json:"plan"`
-	Timing             monitoring.Timing          `json:"timing"`
-	TokenUsage         *monitoring.TokenUsage     `json:"token_usage,omitempty"`
+	ModelInputMessages []Message              `json:"model_input_messages"`
+	ModelOutputMessage models.ChatMessage     `json:"model_output_message"`
+	Plan               string                 `json:"plan"`
+	Timing             monitoring.Timing      `json:"timing"`
+	TokenUsage         *monitoring.TokenUsage `json:"token_usage,omitempty"`
 }
 
 // NewPlanningStep creates a new planning step
@@ -333,17 +333,17 @@ func NewPlanningStep(inputMessages []Message, outputMessage models.ChatMessage, 
 }
 
 // Getter methods for PlanningStep
-func (ps *PlanningStep) GetModelInputMessages() []Message             { return ps.ModelInputMessages }
-func (ps *PlanningStep) GetModelOutputMessage() models.ChatMessage     { return ps.ModelOutputMessage }
-func (ps *PlanningStep) GetPlan() string                               { return ps.Plan }
-func (ps *PlanningStep) GetTiming() monitoring.Timing                  { return ps.Timing }
-func (ps *PlanningStep) GetTokenUsage() *monitoring.TokenUsage         { return ps.TokenUsage }
+func (ps *PlanningStep) GetModelInputMessages() []Message          { return ps.ModelInputMessages }
+func (ps *PlanningStep) GetModelOutputMessage() models.ChatMessage { return ps.ModelOutputMessage }
+func (ps *PlanningStep) GetPlan() string                           { return ps.Plan }
+func (ps *PlanningStep) GetTiming() monitoring.Timing              { return ps.Timing }
+func (ps *PlanningStep) GetTokenUsage() *monitoring.TokenUsage     { return ps.TokenUsage }
 
-func (ps *PlanningStep) SetModelInputMessages(msgs []Message)                 { ps.ModelInputMessages = msgs }
-func (ps *PlanningStep) SetModelOutputMessage(msg models.ChatMessage)         { ps.ModelOutputMessage = msg }
-func (ps *PlanningStep) SetPlan(plan string)                                  { ps.Plan = plan }
-func (ps *PlanningStep) SetTiming(timing monitoring.Timing)                   { ps.Timing = timing }
-func (ps *PlanningStep) SetTokenUsage(usage *monitoring.TokenUsage)           { ps.TokenUsage = usage }
+func (ps *PlanningStep) SetModelInputMessages(msgs []Message)         { ps.ModelInputMessages = msgs }
+func (ps *PlanningStep) SetModelOutputMessage(msg models.ChatMessage) { ps.ModelOutputMessage = msg }
+func (ps *PlanningStep) SetPlan(plan string)                          { ps.Plan = plan }
+func (ps *PlanningStep) SetTiming(timing monitoring.Timing)           { ps.Timing = timing }
+func (ps *PlanningStep) SetTokenUsage(usage *monitoring.TokenUsage)   { ps.TokenUsage = usage }
 
 // GetType implements MemoryStep
 func (ps *PlanningStep) GetType() string {
@@ -355,7 +355,7 @@ func (ps *PlanningStep) ToMessages(summaryMode bool) ([]Message, error) {
 	if summaryMode {
 		return []Message{}, nil
 	}
-	
+
 	return []Message{
 		*NewMessage(models.RoleAssistant, ps.Plan),
 		*NewMessage(models.RoleUser, "Now proceed and carry out this plan."),
@@ -368,28 +368,28 @@ func (ps *PlanningStep) ToDict() (map[string]interface{}, error) {
 		"type": ps.GetType(),
 		"plan": ps.Plan,
 	}
-	
+
 	result["timing"] = map[string]interface{}{
 		"start_time": ps.Timing.StartTime,
 	}
 	if ps.Timing.EndTime != nil && !ps.Timing.EndTime.IsZero() {
 		result["timing"].(map[string]interface{})["end_time"] = *ps.Timing.EndTime
 	}
-	
+
 	if len(ps.ModelInputMessages) > 0 {
 		result["model_input_messages"] = ps.ModelInputMessages
 	}
-	
+
 	msgDict := ps.ModelOutputMessage.ToDict()
 	result["model_output_message"] = msgDict
-	
+
 	if ps.TokenUsage != nil {
 		result["token_usage"] = map[string]interface{}{
 			"input_tokens":  ps.TokenUsage.InputTokens,
 			"output_tokens": ps.TokenUsage.OutputTokens,
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -405,7 +405,7 @@ func NewTaskStep(task string, images ...[]interface{}) *TaskStep {
 	if len(images) > 0 {
 		taskImages = images[0]
 	}
-	
+
 	return &TaskStep{
 		Task:       task,
 		TaskImages: taskImages,
@@ -425,7 +425,7 @@ func (ts *TaskStep) ToMessages(summaryMode bool) ([]Message, error) {
 			"text": fmt.Sprintf("New task:\n%s", ts.Task),
 		},
 	}
-	
+
 	// Add images if present
 	if len(ts.TaskImages) > 0 {
 		for _, img := range ts.TaskImages {
@@ -435,12 +435,12 @@ func (ts *TaskStep) ToMessages(summaryMode bool) ([]Message, error) {
 			})
 		}
 	}
-	
+
 	message := &Message{
 		Role:    models.RoleUser,
 		Content: content,
 	}
-	
+
 	return []Message{*message}, nil
 }
 
@@ -450,11 +450,11 @@ func (ts *TaskStep) ToDict() (map[string]interface{}, error) {
 		"type": ts.GetType(),
 		"task": ts.Task,
 	}
-	
+
 	if len(ts.TaskImages) > 0 {
 		result["task_images_count"] = len(ts.TaskImages)
 	}
-	
+
 	return result, nil
 }
 
@@ -480,7 +480,7 @@ func (sps *SystemPromptStep) ToMessages(summaryMode bool) ([]Message, error) {
 	if summaryMode {
 		return []Message{}, nil
 	}
-	
+
 	return []Message{*NewMessage(models.RoleSystem, sps.SystemPrompt)}, nil
 }
 
@@ -524,7 +524,7 @@ func (fas *FinalAnswerStep) ToDict() (map[string]interface{}, error) {
 }
 
 // Getter and setter methods for FinalAnswerStep
-func (fas *FinalAnswerStep) GetOutput() interface{} { return fas.Output }
+func (fas *FinalAnswerStep) GetOutput() interface{}       { return fas.Output }
 func (fas *FinalAnswerStep) SetOutput(output interface{}) { fas.Output = output }
 
 // AgentMemory represents the agent's conversation memory
@@ -564,7 +564,7 @@ func (am *AgentMemory) GetSteps() []MemoryStep {
 // WriteMemoryToMessages converts the agent's memory to a list of messages for model consumption
 func (am *AgentMemory) WriteMemoryToMessages(summaryMode bool) ([]Message, error) {
 	var messages []Message
-	
+
 	// Add system prompt if not in summary mode
 	if am.SystemPrompt != nil {
 		systemMessages, err := am.SystemPrompt.ToMessages(summaryMode)
@@ -573,7 +573,7 @@ func (am *AgentMemory) WriteMemoryToMessages(summaryMode bool) ([]Message, error
 		}
 		messages = append(messages, systemMessages...)
 	}
-	
+
 	// Add all steps
 	for _, step := range am.Steps {
 		stepMessages, err := step.ToMessages(summaryMode)
@@ -582,7 +582,7 @@ func (am *AgentMemory) WriteMemoryToMessages(summaryMode bool) ([]Message, error
 		}
 		messages = append(messages, stepMessages...)
 	}
-	
+
 	return messages, nil
 }
 
@@ -596,11 +596,11 @@ func (am *AgentMemory) ToDict() (map[string]interface{}, error) {
 		}
 		steps[i] = stepDict
 	}
-	
+
 	result := map[string]interface{}{
 		"steps": steps,
 	}
-	
+
 	if am.SystemPrompt != nil {
 		systemDict, err := am.SystemPrompt.ToDict()
 		if err != nil {
@@ -608,7 +608,7 @@ func (am *AgentMemory) ToDict() (map[string]interface{}, error) {
 		}
 		result["system_prompt"] = systemDict
 	}
-	
+
 	return result, nil
 }
 

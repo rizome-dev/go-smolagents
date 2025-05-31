@@ -16,17 +16,17 @@ import (
 // OpenAIServerModel represents a model using OpenAI-compatible API servers
 type OpenAIServerModel struct {
 	*BaseModel
-	BaseURL    string            `json:"base_url"`
-	APIKey     string            `json:"-"` // API key (not serialized)
-	Headers    map[string]string `json:"headers"`
-	Client     interface{}       `json:"-"` // HTTP client
-	Timeout    int               `json:"timeout"` // Request timeout in seconds
+	BaseURL string            `json:"base_url"`
+	APIKey  string            `json:"-"` // API key (not serialized)
+	Headers map[string]string `json:"headers"`
+	Client  interface{}       `json:"-"`       // HTTP client
+	Timeout int               `json:"timeout"` // Request timeout in seconds
 }
 
 // NewOpenAIServerModel creates a new OpenAI server model
 func NewOpenAIServerModel(modelID string, baseURL string, apiKey string, options map[string]interface{}) *OpenAIServerModel {
 	base := NewBaseModel(modelID, options)
-	
+
 	model := &OpenAIServerModel{
 		BaseModel: base,
 		BaseURL:   baseURL,
@@ -34,7 +34,7 @@ func NewOpenAIServerModel(modelID string, baseURL string, apiKey string, options
 		Headers:   make(map[string]string),
 		Timeout:   30, // Default 30 seconds
 	}
-	
+
 	if options != nil {
 		if headers, ok := options["headers"].(map[string]string); ok {
 			model.Headers = headers
@@ -43,12 +43,12 @@ func NewOpenAIServerModel(modelID string, baseURL string, apiKey string, options
 			model.Timeout = timeout
 		}
 	}
-	
+
 	// Set default base URL if not provided
 	if model.BaseURL == "" {
 		model.BaseURL = "https://api.openai.com/v1"
 	}
-	
+
 	return model
 }
 
@@ -59,7 +59,7 @@ func (osm *OpenAIServerModel) Generate(messages []interface{}, options *Generate
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare completion parameters
 	defaultParams := map[string]interface{}{
 		"model":       osm.ModelID,
@@ -67,9 +67,9 @@ func (osm *OpenAIServerModel) Generate(messages []interface{}, options *Generate
 		"temperature": 0.7,
 		"max_tokens":  2048,
 	}
-	
+
 	priorityParams := map[string]interface{}{}
-	
+
 	// Add tools if provided
 	if options != nil && len(options.ToolsToCallFrom) > 0 {
 		tools := make([]map[string]interface{}, len(options.ToolsToCallFrom))
@@ -79,25 +79,25 @@ func (osm *OpenAIServerModel) Generate(messages []interface{}, options *Generate
 		priorityParams["tools"] = tools
 		priorityParams["tool_choice"] = "auto"
 	}
-	
+
 	// Add response format if provided
 	if options != nil && options.ResponseFormat != nil {
 		priorityParams["response_format"] = options.ResponseFormat
 	}
-	
+
 	// Add stop sequences if supported
 	if options != nil && len(options.StopSequences) > 0 && SupportsStopParameter(osm.ModelID) {
 		priorityParams["stop"] = options.StopSequences
 	}
-	
+
 	kwargs := osm.PrepareCompletionKwargs(options, defaultParams, priorityParams)
-	
+
 	// Make the API call
 	result, err := osm.callAPI(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("API call failed: %w", err)
 	}
-	
+
 	// Parse the response
 	return osm.parseResponse(result)
 }
@@ -109,7 +109,7 @@ func (osm *OpenAIServerModel) GenerateStream(messages []interface{}, options *Ge
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare completion parameters
 	defaultParams := map[string]interface{}{
 		"model":       osm.ModelID,
@@ -118,9 +118,9 @@ func (osm *OpenAIServerModel) GenerateStream(messages []interface{}, options *Ge
 		"max_tokens":  2048,
 		"stream":      true,
 	}
-	
+
 	priorityParams := map[string]interface{}{}
-	
+
 	// Add tools if provided
 	if options != nil && len(options.ToolsToCallFrom) > 0 {
 		tools := make([]map[string]interface{}, len(options.ToolsToCallFrom))
@@ -130,16 +130,16 @@ func (osm *OpenAIServerModel) GenerateStream(messages []interface{}, options *Ge
 		priorityParams["tools"] = tools
 		priorityParams["tool_choice"] = "auto"
 	}
-	
+
 	kwargs := osm.PrepareCompletionKwargs(options, defaultParams, priorityParams)
-	
+
 	// Create the stream channel
 	streamChan := make(chan *ChatMessageStreamDelta, 100)
-	
+
 	// Start streaming in a goroutine
 	go func() {
 		defer close(streamChan)
-		
+
 		// Make streaming API call
 		err := osm.callStreamingAPI(kwargs, streamChan)
 		if err != nil {
@@ -147,7 +147,7 @@ func (osm *OpenAIServerModel) GenerateStream(messages []interface{}, options *Ge
 			return
 		}
 	}()
-	
+
 	return streamChan, nil
 }
 
@@ -172,14 +172,14 @@ func (osm *OpenAIServerModel) callAPI(kwargs map[string]interface{}) (map[string
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(osm.BaseURL, "/"))
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	if osm.APIKey != "" {
@@ -188,36 +188,36 @@ func (osm *OpenAIServerModel) callAPI(kwargs map[string]interface{}) (map[string
 	for key, value := range osm.Headers {
 		req.Header.Set(key, value)
 	}
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: time.Duration(osm.Timeout) * time.Second,
 	}
-	
+
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse JSON response
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	return result, nil
 }
 
@@ -229,14 +229,14 @@ func (osm *OpenAIServerModel) callStreamingAPI(kwargs map[string]interface{}, st
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(osm.BaseURL, "/"))
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers for streaming
 	req.Header.Set("Content-Type", "application/json")
 	if osm.APIKey != "" {
@@ -247,48 +247,69 @@ func (osm *OpenAIServerModel) callStreamingAPI(kwargs map[string]interface{}, st
 	for key, value := range osm.Headers {
 		req.Header.Set(key, value)
 	}
-	
+
 	// Create HTTP client with longer timeout for streaming
 	client := &http.Client{
 		Timeout: time.Duration(osm.Timeout*10) * time.Second, // 10x timeout for streaming
 	}
-	
+
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Process Server-Sent Events
 	return osm.processSSEStream(resp.Body, streamChan)
 }
 
 // parseResponse parses the API response into a ChatMessage
 func (osm *OpenAIServerModel) parseResponse(response map[string]interface{}) (*ChatMessage, error) {
-	choices, ok := response["choices"].([]map[string]interface{})
-	if !ok || len(choices) == 0 {
+	// Handle choices field - it can be either []interface{} or []map[string]interface{}
+	var choices []map[string]interface{}
+
+	if choicesRaw, ok := response["choices"]; ok {
+		switch c := choicesRaw.(type) {
+		case []interface{}:
+			// Convert []interface{} to []map[string]interface{}
+			choices = make([]map[string]interface{}, len(c))
+			for i, choice := range c {
+				if choiceMap, ok := choice.(map[string]interface{}); ok {
+					choices[i] = choiceMap
+				} else {
+					return nil, fmt.Errorf("invalid choice format at index %d: %T", i, choice)
+				}
+			}
+		case []map[string]interface{}:
+			choices = c
+		default:
+			return nil, fmt.Errorf("invalid choices type: %T", choicesRaw)
+		}
+	}
+
+	if len(choices) == 0 {
 		return nil, fmt.Errorf("invalid response format: no choices found")
 	}
-	
+
 	choice := choices[0]
 	messageData, ok := choice["message"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid response format: no message found")
 	}
-	
+
 	message := &ChatMessage{}
 	err := message.FromDict(messageData, response, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message: %w", err)
 	}
-	
+
 	// Parse token usage if available
 	if usage, ok := response["usage"].(map[string]interface{}); ok {
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
@@ -297,10 +318,10 @@ func (osm *OpenAIServerModel) parseResponse(response map[string]interface{}) (*C
 			}
 		}
 	}
-	
+
 	// Store raw response
 	message.Raw = response
-	
+
 	return message, nil
 }
 
@@ -316,19 +337,19 @@ type AzureOpenAIServerModel struct {
 func NewAzureOpenAIServerModel(modelID string, resourceName string, deployment string, apiKey string, options map[string]interface{}) *AzureOpenAIServerModel {
 	// Construct Azure-specific base URL
 	baseURL := fmt.Sprintf("https://%s.openai.azure.com/openai/deployments/%s", resourceName, deployment)
-	
+
 	if options == nil {
 		options = make(map[string]interface{})
 	}
-	
+
 	// Set default API version
 	apiVersion := "2024-08-01-preview"
 	if version, ok := options["api_version"].(string); ok {
 		apiVersion = version
 	}
-	
+
 	openaiModel := NewOpenAIServerModel(modelID, baseURL, apiKey, options)
-	
+
 	return &AzureOpenAIServerModel{
 		OpenAIServerModel: openaiModel,
 		APIVersion:        apiVersion,
@@ -361,7 +382,7 @@ type TransformersModel struct {
 // NewTransformersModelImpl creates a new transformers model implementation
 func NewTransformersModelImpl(modelID string, options map[string]interface{}) *TransformersModel {
 	base := NewBaseModel(modelID, options)
-	
+
 	model := &TransformersModel{
 		BaseModel:       base,
 		ModelPath:       modelID, // Default to model ID as path
@@ -370,7 +391,7 @@ func NewTransformersModelImpl(modelID string, options map[string]interface{}) *T
 		ModelKwargs:     make(map[string]interface{}),
 		TokenizerKwargs: make(map[string]interface{}),
 	}
-	
+
 	if options != nil {
 		if modelPath, ok := options["model_path"].(string); ok {
 			model.ModelPath = modelPath
@@ -391,7 +412,7 @@ func NewTransformersModelImpl(modelID string, options map[string]interface{}) *T
 			model.TokenizerKwargs = tokenizerKwargs
 		}
 	}
-	
+
 	return model
 }
 
@@ -405,10 +426,10 @@ func (tm *TransformersModel) Generate(messages []interface{}, options *GenerateO
 	// 4. Generate with the model
 	// 5. Decode the output
 	// 6. Handle tool calling if supported
-	
+
 	return &ChatMessage{
-		Role:    "assistant",
-		Content: openAIStrPtr("This is a placeholder response from TransformersModel"),
+		Role:       "assistant",
+		Content:    openAIStrPtr("This is a placeholder response from TransformersModel"),
 		TokenUsage: monitoring.NewTokenUsage(100, 50),
 	}, nil
 }
@@ -427,20 +448,20 @@ func (tm *TransformersModel) SupportsStreaming() bool {
 func (osm *OpenAIServerModel) processSSEStream(body io.ReadCloser, streamChan chan<- *ChatMessageStreamDelta) error {
 	buffer := make([]byte, 4096)
 	var accumulated strings.Builder
-	
+
 	for {
 		n, err := body.Read(buffer)
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("error reading stream: %w", err)
 		}
-		
+
 		if n == 0 {
 			break
 		}
-		
+
 		accumulated.Write(buffer[:n])
 		data := accumulated.String()
-		
+
 		// Process complete SSE events
 		lines := strings.Split(data, "\n")
 		for i, line := range lines {
@@ -449,14 +470,14 @@ func (osm *OpenAIServerModel) processSSEStream(body io.ReadCloser, streamChan ch
 				if jsonData == "[DONE]" {
 					return nil
 				}
-				
+
 				var delta map[string]interface{}
 				if err := json.Unmarshal([]byte(jsonData), &delta); err == nil {
 					if streamDelta := osm.parseStreamDelta(delta); streamDelta != nil {
 						streamChan <- streamDelta
 					}
 				}
-				
+
 				// Remove processed lines from buffer
 				accumulated.Reset()
 				accumulated.WriteString(strings.Join(lines[i+1:], "\n"))
@@ -464,7 +485,7 @@ func (osm *OpenAIServerModel) processSSEStream(body io.ReadCloser, streamChan ch
 			}
 		}
 	}
-	
+
 	return nil
 }
 

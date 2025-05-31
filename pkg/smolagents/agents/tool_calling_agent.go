@@ -39,32 +39,32 @@ func NewToolCallingAgent(
 	systemPrompt string,
 	options map[string]interface{},
 ) (*ToolCallingAgent, error) {
-	
+
 	// Create base agent
 	baseAgent, err := NewBaseMultiStepAgent(model, toolsArg, systemPrompt, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Create final answer tool
 	finalAnswerTool := default_tools.NewFinalAnswerTool()
-	
+
 	// Add final answer tool to the agent's tools
 	err = baseAgent.AddTool(finalAnswerTool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add final answer tool: %w", err)
 	}
-	
+
 	agent := &ToolCallingAgent{
 		BaseMultiStepAgent: baseAgent,
 		finalAnswerTool:    finalAnswerTool,
 	}
-	
+
 	// Set default system prompt if none provided
 	if systemPrompt == "" {
 		agent.initializeSystemPrompt()
 	}
-	
+
 	return agent, nil
 }
 
@@ -78,38 +78,38 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 	if options == nil {
 		return nil, utils.NewAgentError("run options cannot be nil")
 	}
-	
+
 	// Set running state
 	tca.isRunning = true
 	defer func() { tca.isRunning = false }()
-	
+
 	// Start timing
 	result := NewRunResult()
-	
+
 	// Reset if requested
 	if options.Reset {
 		tca.Reset()
 	}
-	
+
 	// Set up context
 	ctx := options.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	
+
 	// Add task to memory
 	taskStep := memory.NewTaskStep(options.Task)
 	if len(options.Images) > 0 {
 		taskStep.TaskImages = options.Images
 	}
 	tca.memory.AddStep(taskStep)
-	
+
 	// Determine max steps
 	maxSteps := tca.maxSteps
 	if options.MaxSteps != nil {
 		maxSteps = *options.MaxSteps
 	}
-	
+
 	// Execute agent steps
 	for tca.stepCount < maxSteps {
 		// Check for interruption
@@ -118,7 +118,7 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 			result.Error = utils.NewAgentExecutionError("agent execution was interrupted")
 			break
 		}
-		
+
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -128,9 +128,9 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 			return result, nil
 		default:
 		}
-		
+
 		tca.stepCount++
-		
+
 		// Execute step
 		stepResult, err := tca.executeStep(ctx, tca.stepCount, options)
 		if err != nil {
@@ -138,7 +138,7 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 			result.Error = err
 			break
 		}
-		
+
 		// Execute step callbacks
 		if len(options.StepCallbacks) > 0 {
 			latestStep := tca.memory.GetLastStep()
@@ -153,7 +153,7 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 				}
 			}
 		}
-		
+
 		// Check for final answer
 		if stepResult.isFinalAnswer {
 			result.State = "success"
@@ -163,28 +163,28 @@ func (tca *ToolCallingAgent) Run(options *RunOptions) (*RunResult, error) {
 			break
 		}
 	}
-	
+
 	// Check if max steps reached
 	if tca.stepCount >= maxSteps && result.State == "" {
 		result.State = "max_steps_error"
 		result.Error = utils.NewAgentMaxStepsError(fmt.Sprintf("reached maximum steps: %d", maxSteps))
 	}
-	
+
 	// Finalize result
 	result.StepCount = tca.stepCount
 	result.Messages = tca.getMessagesForResult()
 	result.Timing.End()
-	
+
 	return result, nil
 }
 
 // RunStream implements MultiStepAgent for ToolCallingAgent
 func (tca *ToolCallingAgent) RunStream(options *RunOptions) (<-chan *StreamStepResult, error) {
 	resultChan := make(chan *StreamStepResult, 100)
-	
+
 	go func() {
 		defer close(resultChan)
-		
+
 		// Execute the agent and stream results
 		result, err := tca.Run(options)
 		if err != nil {
@@ -194,7 +194,7 @@ func (tca *ToolCallingAgent) RunStream(options *RunOptions) (<-chan *StreamStepR
 			}
 			return
 		}
-		
+
 		// Send final result
 		resultChan <- &StreamStepResult{
 			StepNumber: tca.stepCount,
@@ -208,7 +208,7 @@ func (tca *ToolCallingAgent) RunStream(options *RunOptions) (<-chan *StreamStepR
 			},
 		}
 	}()
-	
+
 	return resultChan, nil
 }
 
@@ -226,13 +226,13 @@ func (tca *ToolCallingAgent) executeStep(ctx context.Context, stepNumber int, op
 		step.Timing.End()
 		tca.memory.AddStep(step)
 	}()
-	
+
 	// Start monitoring
 	if tca.monitor != nil {
 		tca.monitor.StartStep(stepNumber, "tool_calling")
 		defer tca.monitor.EndStep()
 	}
-	
+
 	// Prepare messages for the model
 	messages, err := tca.memory.WriteMemoryToMessages(false)
 	if err != nil {
@@ -240,47 +240,47 @@ func (tca *ToolCallingAgent) executeStep(ctx context.Context, stepNumber int, op
 		return nil, step.Error
 	}
 	step.ModelInputMessages = messages
-	
+
 	// Convert messages to model format
 	modelMessages := make([]interface{}, len(messages))
 	for i, msg := range messages {
 		modelMessages[i] = msg.ToDict()
 	}
-	
+
 	// Build generation options
 	genOptions := &models.GenerateOptions{
 		ToolsToCallFrom: tca.tools,
 		MaxTokens:       func() *int { v := 2048; return &v }(),
 		Temperature:     func() *float64 { v := 0.7; return &v }(),
 	}
-	
+
 	// Generate response
 	response, err := tca.model.Generate(modelMessages, genOptions)
 	if err != nil {
 		step.Error = utils.NewAgentGenerationError("model generation failed: " + err.Error())
 		return nil, step.Error
 	}
-	
+
 	step.ModelOutputMessage = &models.ChatMessage{
-		Role: response.Role,
+		Role:    response.Role,
 		Content: response.Content,
 	}
-	
+
 	if response.Content != nil {
 		step.ModelOutput = *response.Content
 	}
 	step.TokenUsage = response.TokenUsage
-	
+
 	// Add token usage to monitoring
 	if tca.monitor != nil {
 		tca.monitor.AddTokenUsage(response.TokenUsage)
 	}
-	
+
 	// Process tool calls
 	if len(response.ToolCalls) > 0 {
 		return tca.processToolCalls(ctx, step, response.ToolCalls)
 	}
-	
+
 	// No tool calls - this might be a direct answer
 	if response.Content != nil && *response.Content != "" {
 		// Check if this looks like a final answer
@@ -293,7 +293,7 @@ func (tca *ToolCallingAgent) executeStep(ctx context.Context, stepNumber int, op
 			}, nil
 		}
 	}
-	
+
 	return &stepResult{
 		isFinalAnswer: false,
 		tokenUsage:    response.TokenUsage,
@@ -305,7 +305,7 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 	step.ToolCalls = make([]memory.ToolCall, len(toolCalls))
 	var observations []string
 	var lastOutput interface{}
-	
+
 	for i, tc := range toolCalls {
 		// Convert to memory.ToolCall
 		memoryTC := memory.ToolCall{
@@ -313,7 +313,7 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 			Name:      tc.Function.Name,
 			Arguments: make(map[string]interface{}),
 		}
-		
+
 		// Parse arguments
 		if args, ok := tc.Function.Arguments.(map[string]interface{}); ok {
 			memoryTC.Arguments = args
@@ -326,24 +326,24 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 				memoryTC.Arguments = map[string]interface{}{"input": argsStr}
 			}
 		}
-		
+
 		step.ToolCalls[i] = memoryTC
-		
+
 		// Log tool call
 		if tca.monitor != nil {
 			tca.monitor.LogToolCall(tc.Function.Name, memoryTC.Arguments)
 		}
-		
+
 		// Check for final answer
 		if tc.Function.Name == "final_answer" {
 			if answer, exists := memoryTC.Arguments["answer"]; exists {
 				step.ActionOutput = answer
-				
+
 				// Log tool result
 				if tca.monitor != nil {
 					tca.monitor.LogToolResult("final_answer", answer, nil)
 				}
-				
+
 				return &stepResult{
 					isFinalAnswer: true,
 					output:        answer,
@@ -351,7 +351,7 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 				}, nil
 			}
 		}
-		
+
 		// Execute the tool
 		tool, exists := tca.GetTool(tc.Function.Name)
 		if !exists {
@@ -362,7 +362,7 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 			}
 			continue
 		}
-		
+
 		// Execute tool
 		output, err := tool.Call(memoryTC.Arguments)
 		if err != nil {
@@ -379,12 +379,12 @@ func (tca *ToolCallingAgent) processToolCalls(ctx context.Context, step *memory.
 			}
 		}
 	}
-	
+
 	step.Observations = strings.Join(observations, "\n")
 	if lastOutput != nil {
 		step.ActionOutput = lastOutput
 	}
-	
+
 	return &stepResult{
 		isFinalAnswer: false,
 		output:        lastOutput,
@@ -402,30 +402,30 @@ func (tca *ToolCallingAgent) isFinalAnswerContent(content string) bool {
 		"(?i)the answer is",
 		"(?i)therefore",
 	}
-	
+
 	for _, pattern := range finalAnswerPatterns {
 		matched, _ := regexp.MatchString(pattern, content)
 		if matched {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // initializeSystemPrompt sets up the default system prompt
 func (tca *ToolCallingAgent) initializeSystemPrompt() {
 	var toolDescriptions []string
-	
+
 	for _, tool := range tca.tools {
 		desc := fmt.Sprintf("- %s: %s", tool.GetName(), tool.GetDescription())
 		toolDescriptions = append(toolDescriptions, desc)
 	}
-	
+
 	variables := map[string]interface{}{
 		"tool_descriptions": strings.Join(toolDescriptions, "\n"),
 	}
-	
+
 	systemPrompt := PopulateTemplate(DefaultToolCallingSystemPrompt, variables)
 	tca.SetSystemPrompt(systemPrompt)
 }
@@ -438,11 +438,11 @@ func (tca *ToolCallingAgent) getMessagesForResult() []map[string]interface{} {
 		return []map[string]interface{}{}
 	}
 	result := make([]map[string]interface{}, len(messages))
-	
+
 	for i, msg := range messages {
 		result[i] = msg.ToDict()
 	}
-	
+
 	return result
 }
 
@@ -462,12 +462,12 @@ func (tca *ToolCallingAgent) Clone() (*ToolCallingAgent, error) {
 		"planning_interval": tca.planningInterval,
 		"prompt_templates":  tca.promptTemplates,
 	}
-	
+
 	// Copy additional args
 	for k, v := range tca.additionalArgs {
 		options[k] = v
 	}
-	
+
 	// Filter out the final_answer tool since NewToolCallingAgent will add it automatically
 	toolsToClone := make([]tools.Tool, 0)
 	for _, tool := range tca.tools {
@@ -475,17 +475,17 @@ func (tca *ToolCallingAgent) Clone() (*ToolCallingAgent, error) {
 			toolsToClone = append(toolsToClone, tool)
 		}
 	}
-	
+
 	clone, err := NewToolCallingAgent(tca.model, toolsToClone, tca.systemPrompt, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Copy managed agents
 	for name, agent := range tca.managedAgents {
 		clone.managedAgents[name] = agent
 	}
-	
+
 	return clone, nil
 }
 
@@ -505,11 +505,11 @@ func (tca *ToolCallingAgent) ValidateToolCall(toolCall memory.ToolCall) error {
 	if !exists {
 		return utils.NewAgentToolCallError(fmt.Sprintf("tool '%s' not found", toolCall.Name))
 	}
-	
+
 	// Validate tool arguments
 	if err := tool.Validate(); err != nil {
 		return utils.NewAgentToolCallError(fmt.Sprintf("tool validation failed: %v", err))
 	}
-	
+
 	return nil
 }

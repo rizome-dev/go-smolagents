@@ -15,20 +15,20 @@ import (
 
 // MCPClient represents a client for communicating with MCP servers
 type MCPClient struct {
-	ServerPath    string            `json:"server_path"`
-	ServerArgs    []string          `json:"server_args"`
-	Environment   map[string]string `json:"environment"`
-	Timeout       time.Duration     `json:"timeout"`
-	MaxRetries    int               `json:"max_retries"`
-	cmd           *exec.Cmd
-	stdin         io.WriteCloser
-	stdout        io.ReadCloser
-	stderr        io.ReadCloser
-	requestID     int
-	mu            sync.Mutex
-	initialized   bool
-	capabilities  *MCPCapabilities
-	tools         map[string]*MCPToolDefinition
+	ServerPath   string            `json:"server_path"`
+	ServerArgs   []string          `json:"server_args"`
+	Environment  map[string]string `json:"environment"`
+	Timeout      time.Duration     `json:"timeout"`
+	MaxRetries   int               `json:"max_retries"`
+	cmd          *exec.Cmd
+	stdin        io.WriteCloser
+	stdout       io.ReadCloser
+	stderr       io.ReadCloser
+	requestID    int
+	mu           sync.Mutex
+	initialized  bool
+	capabilities *MCPCapabilities
+	tools        map[string]*MCPToolDefinition
 }
 
 // MCPCapabilities represents the capabilities of an MCP server
@@ -81,7 +81,7 @@ func NewMCPClient(serverPath string, serverArgs []string, options map[string]int
 		MaxRetries:  3,
 		tools:       make(map[string]*MCPToolDefinition),
 	}
-	
+
 	if options != nil {
 		if env, ok := options["environment"].(map[string]string); ok {
 			client.Environment = env
@@ -93,7 +93,7 @@ func NewMCPClient(serverPath string, serverArgs []string, options map[string]int
 			client.MaxRetries = maxRetries
 		}
 	}
-	
+
 	return client
 }
 
@@ -101,48 +101,48 @@ func NewMCPClient(serverPath string, serverArgs []string, options map[string]int
 func (mc *MCPClient) Connect() error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	
+
 	if mc.initialized {
 		return nil
 	}
-	
+
 	// Create command
 	mc.cmd = exec.Command(mc.ServerPath, mc.ServerArgs...)
-	
+
 	// Set environment
 	mc.cmd.Env = os.Environ()
 	for key, value := range mc.Environment {
 		mc.cmd.Env = append(mc.cmd.Env, fmt.Sprintf("%s=%s", key, value))
 	}
-	
+
 	// Set up pipes
 	var err error
 	mc.stdin, err = mc.cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
-	
+
 	mc.stdout, err = mc.cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	mc.stderr, err = mc.cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	
+
 	// Start the server
 	if err := mc.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
-	
+
 	// Initialize the connection
 	if err := mc.initialize(); err != nil {
 		mc.Close()
 		return fmt.Errorf("failed to initialize MCP connection: %w", err)
 	}
-	
+
 	mc.initialized = true
 	return nil
 }
@@ -168,13 +168,13 @@ func (mc *MCPClient) initialize() error {
 			},
 		},
 	}
-	
+
 	// Send request and wait for response
 	response, err := mc.sendRequest(initRequest)
 	if err != nil {
 		return fmt.Errorf("initialization failed: %w", err)
 	}
-	
+
 	// Parse capabilities
 	if result, ok := response.Result.(map[string]interface{}); ok {
 		if caps, ok := result["capabilities"].(map[string]interface{}); ok {
@@ -183,14 +183,14 @@ func (mc *MCPClient) initialize() error {
 			json.Unmarshal(capData, mc.capabilities)
 		}
 	}
-	
+
 	// Send initialized notification
 	initializedNotif := MCPMessage{
 		JSONRPC: "2.0",
 		Method:  "notifications/initialized",
 		Params:  map[string]interface{}{},
 	}
-	
+
 	return mc.sendNotification(initializedNotif)
 }
 
@@ -201,7 +201,7 @@ func (mc *MCPClient) ListTools() ([]*MCPToolDefinition, error) {
 			return nil, err
 		}
 	}
-	
+
 	// Send tools/list request
 	request := MCPMessage{
 		JSONRPC: "2.0",
@@ -209,12 +209,12 @@ func (mc *MCPClient) ListTools() ([]*MCPToolDefinition, error) {
 		Method:  "tools/list",
 		Params:  map[string]interface{}{},
 	}
-	
+
 	response, err := mc.sendRequest(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tools: %w", err)
 	}
-	
+
 	// Parse response
 	var tools []*MCPToolDefinition
 	if result, ok := response.Result.(map[string]interface{}); ok {
@@ -237,7 +237,7 @@ func (mc *MCPClient) ListTools() ([]*MCPToolDefinition, error) {
 			}
 		}
 	}
-	
+
 	return tools, nil
 }
 
@@ -248,7 +248,7 @@ func (mc *MCPClient) CallTool(name string, arguments map[string]interface{}) (in
 			return nil, err
 		}
 	}
-	
+
 	// Send tools/call request
 	request := MCPMessage{
 		JSONRPC: "2.0",
@@ -259,19 +259,19 @@ func (mc *MCPClient) CallTool(name string, arguments map[string]interface{}) (in
 			"arguments": arguments,
 		},
 	}
-	
+
 	response, err := mc.sendRequest(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call tool %s: %w", name, err)
 	}
-	
+
 	// Parse response
 	if result, ok := response.Result.(map[string]interface{}); ok {
 		if content, ok := result["content"]; ok {
 			return content, nil
 		}
 	}
-	
+
 	return response.Result, nil
 }
 
@@ -282,19 +282,19 @@ func (mc *MCPClient) sendRequest(request MCPMessage) (*MCPMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Send request
 	if _, err := mc.stdin.Write(append(data, '\n')); err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	
+
 	// Wait for response
 	ctx, cancel := context.WithTimeout(context.Background(), mc.Timeout)
 	defer cancel()
-	
+
 	responseChan := make(chan *MCPMessage, 1)
 	errorChan := make(chan error, 1)
-	
+
 	go func() {
 		scanner := bufio.NewScanner(mc.stdout)
 		for scanner.Scan() {
@@ -302,25 +302,25 @@ func (mc *MCPClient) sendRequest(request MCPMessage) (*MCPMessage, error) {
 			if line == "" {
 				continue
 			}
-			
+
 			var response MCPMessage
 			if err := json.Unmarshal([]byte(line), &response); err != nil {
 				errorChan <- fmt.Errorf("failed to parse response: %w", err)
 				return
 			}
-			
+
 			// Check if this is the response to our request
 			if response.ID == request.ID {
 				responseChan <- &response
 				return
 			}
 		}
-		
+
 		if err := scanner.Err(); err != nil {
 			errorChan <- fmt.Errorf("error reading response: %w", err)
 		}
 	}()
-	
+
 	select {
 	case response := <-responseChan:
 		if response.Error != nil {
@@ -340,11 +340,11 @@ func (mc *MCPClient) sendNotification(notification MCPMessage) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
-	
+
 	if _, err := mc.stdin.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -358,11 +358,11 @@ func (mc *MCPClient) nextRequestID() int {
 func (mc *MCPClient) Close() error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	
+
 	if !mc.initialized {
 		return nil
 	}
-	
+
 	// Close pipes
 	if mc.stdin != nil {
 		mc.stdin.Close()
@@ -373,13 +373,13 @@ func (mc *MCPClient) Close() error {
 	if mc.stderr != nil {
 		mc.stderr.Close()
 	}
-	
+
 	// Terminate the process
 	if mc.cmd != nil && mc.cmd.Process != nil {
 		mc.cmd.Process.Kill()
 		mc.cmd.Wait()
 	}
-	
+
 	mc.initialized = false
 	return nil
 }
@@ -391,7 +391,7 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list MCP tools: %w", err)
 	}
-	
+
 	// Find the tool
 	var toolDef *MCPToolDefinition
 	for _, tool := range tools {
@@ -400,11 +400,11 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 			break
 		}
 	}
-	
+
 	if toolDef == nil {
 		return nil, fmt.Errorf("tool %s not found on MCP server", toolName)
 	}
-	
+
 	// Convert MCP input schema to ToolInput format
 	inputs := make(map[string]*ToolInput)
 	if toolDef.InputSchema != nil {
@@ -416,14 +416,14 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 						Description: "",
 						Nullable:    true,
 					}
-					
+
 					if propType, ok := prop["type"].(string); ok {
 						input.Type = propType
 					}
 					if desc, ok := prop["description"].(string); ok {
 						input.Description = desc
 					}
-					
+
 					// Check if required
 					if required, ok := toolDef.InputSchema["required"].([]interface{}); ok {
 						for _, req := range required {
@@ -433,13 +433,13 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 							}
 						}
 					}
-					
+
 					inputs[name] = input
 				}
 			}
 		}
 	}
-	
+
 	// Create base tool
 	baseTool := NewBaseTool(
 		toolDef.Name,
@@ -447,17 +447,17 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 		inputs,
 		"any", // MCP tools can return various types
 	)
-	
+
 	// Create MCP tool
 	mcpTool := &MCPTool{
 		BaseTool:   baseTool,
 		client:     client,
 		definition: toolDef,
 	}
-	
+
 	// Set the forward function
 	mcpTool.ForwardFunc = mcpTool.forward
-	
+
 	return mcpTool, nil
 }
 
@@ -465,7 +465,7 @@ func LoadMCPTool(client *MCPClient, toolName string) (*MCPTool, error) {
 func (mt *MCPTool) forward(args ...interface{}) (interface{}, error) {
 	// Convert args to input map
 	inputs := make(map[string]interface{})
-	
+
 	// If we have a single map argument, use it directly
 	if len(args) == 1 {
 		if inputMap, ok := args[0].(map[string]interface{}); ok {
@@ -489,7 +489,7 @@ func (mt *MCPTool) forward(args ...interface{}) (interface{}, error) {
 			}
 		}
 	}
-	
+
 	// Call the MCP tool
 	return mt.client.CallTool(mt.definition.Name, inputs)
 }
@@ -513,21 +513,21 @@ func NewMCPToolRegistry() *MCPToolRegistry {
 func (mtr *MCPToolRegistry) AddMCPServer(name, serverPath string, serverArgs []string, options map[string]interface{}) error {
 	mtr.mu.Lock()
 	defer mtr.mu.Unlock()
-	
+
 	client := NewMCPClient(serverPath, serverArgs, options)
 	if err := client.Connect(); err != nil {
 		return fmt.Errorf("failed to connect to MCP server %s: %w", name, err)
 	}
-	
+
 	mtr.clients[name] = client
-	
+
 	// Load all tools from this server
 	tools, err := client.ListTools()
 	if err != nil {
 		client.Close()
 		return fmt.Errorf("failed to list tools from MCP server %s: %w", name, err)
 	}
-	
+
 	for _, toolDef := range tools {
 		mcpTool, err := LoadMCPTool(client, toolDef.Name)
 		if err != nil {
@@ -535,7 +535,7 @@ func (mtr *MCPToolRegistry) AddMCPServer(name, serverPath string, serverArgs []s
 		}
 		mtr.tools[toolDef.Name] = mcpTool
 	}
-	
+
 	return nil
 }
 
@@ -543,7 +543,7 @@ func (mtr *MCPToolRegistry) AddMCPServer(name, serverPath string, serverArgs []s
 func (mtr *MCPToolRegistry) GetTool(name string) (*MCPTool, bool) {
 	mtr.mu.RLock()
 	defer mtr.mu.RUnlock()
-	
+
 	tool, exists := mtr.tools[name]
 	return tool, exists
 }
@@ -552,7 +552,7 @@ func (mtr *MCPToolRegistry) GetTool(name string) (*MCPTool, bool) {
 func (mtr *MCPToolRegistry) ListTools() map[string]*MCPTool {
 	mtr.mu.RLock()
 	defer mtr.mu.RUnlock()
-	
+
 	result := make(map[string]*MCPTool)
 	for k, v := range mtr.tools {
 		result[k] = v
@@ -564,23 +564,23 @@ func (mtr *MCPToolRegistry) ListTools() map[string]*MCPTool {
 func (mtr *MCPToolRegistry) RemoveServer(name string) error {
 	mtr.mu.Lock()
 	defer mtr.mu.Unlock()
-	
+
 	client, exists := mtr.clients[name]
 	if !exists {
 		return fmt.Errorf("MCP server %s not found", name)
 	}
-	
+
 	// Remove all tools from this server
 	for toolName, tool := range mtr.tools {
 		if tool.client == client {
 			delete(mtr.tools, toolName)
 		}
 	}
-	
+
 	// Close and remove the client
 	client.Close()
 	delete(mtr.clients, name)
-	
+
 	return nil
 }
 
@@ -588,14 +588,14 @@ func (mtr *MCPToolRegistry) RemoveServer(name string) error {
 func (mtr *MCPToolRegistry) Close() error {
 	mtr.mu.Lock()
 	defer mtr.mu.Unlock()
-	
+
 	for _, client := range mtr.clients {
 		client.Close()
 	}
-	
+
 	mtr.clients = make(map[string]*MCPClient)
 	mtr.tools = make(map[string]*MCPTool)
-	
+
 	return nil
 }
 

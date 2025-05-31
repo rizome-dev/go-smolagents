@@ -44,7 +44,7 @@ func main() {
 
 	// Create tools for web search and research
 	agentTools := []tools.Tool{
-		default_tools.NewWebSearchTool(),       // Primary web search
+		default_tools.NewWebSearchTool(),        // Primary web search
 		default_tools.NewDuckDuckGoSearchTool(), // Alternative search
 		default_tools.NewWikipediaSearchTool(),  // Knowledge base
 		default_tools.NewVisitWebpageTool(),     // Deep content extraction

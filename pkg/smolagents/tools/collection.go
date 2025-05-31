@@ -9,9 +9,9 @@ import (
 
 // ToolCollection manages a collection of tools
 type ToolCollection struct {
-	Tools       []Tool            `json:"tools"`
-	ToolsMap    map[string]Tool   `json:"-"`
-	orderedKeys []string          // Maintains insertion order
+	Tools       []Tool          `json:"tools"`
+	ToolsMap    map[string]Tool `json:"-"`
+	orderedKeys []string        // Maintains insertion order
 }
 
 // NewToolCollection creates a new tool collection
@@ -21,14 +21,14 @@ func NewToolCollection(tools ...[]Tool) *ToolCollection {
 		ToolsMap:    make(map[string]Tool),
 		orderedKeys: make([]string, 0),
 	}
-	
+
 	// Add initial tools if provided
 	if len(tools) > 0 {
 		for _, tool := range tools[0] {
 			tc.AddTool(tool)
 		}
 	}
-	
+
 	return tc
 }
 
@@ -37,23 +37,23 @@ func (tc *ToolCollection) Add(tool Tool) error {
 	if tool == nil {
 		return fmt.Errorf("cannot add nil tool")
 	}
-	
+
 	// Validate the tool
 	if err := tool.Validate(); err != nil {
 		return fmt.Errorf("tool validation failed: %w", err)
 	}
-	
+
 	name := tool.GetName()
-	
+
 	// Check if tool already exists
 	if _, exists := tc.ToolsMap[name]; exists {
 		return fmt.Errorf("tool with name '%s' already exists", name)
 	}
-	
+
 	tc.Tools = append(tc.Tools, tool)
 	tc.ToolsMap[name] = tool
 	tc.orderedKeys = append(tc.orderedKeys, name)
-	
+
 	return nil
 }
 
@@ -72,9 +72,9 @@ func (tc *ToolCollection) RemoveTool(name string) bool {
 	if _, exists := tc.ToolsMap[name]; !exists {
 		return false
 	}
-	
+
 	delete(tc.ToolsMap, name)
-	
+
 	// Remove from Tools slice
 	for i, tool := range tc.Tools {
 		if tool.GetName() == name {
@@ -82,7 +82,7 @@ func (tc *ToolCollection) RemoveTool(name string) bool {
 			break
 		}
 	}
-	
+
 	// Remove from ordered keys
 	for i, key := range tc.orderedKeys {
 		if key == name {
@@ -90,7 +90,7 @@ func (tc *ToolCollection) RemoveTool(name string) bool {
 			break
 		}
 	}
-	
+
 	return true
 }
 
@@ -159,13 +159,13 @@ func (tc *ToolCollection) Merge(other *ToolCollection) error {
 // Filter returns a new collection with tools that match the predicate
 func (tc *ToolCollection) Filter(predicate func(Tool) bool) *ToolCollection {
 	filtered := NewToolCollection()
-	
+
 	for _, tool := range tc.List() {
 		if predicate(tool) {
 			filtered.Add(tool) // Ignore errors since we're filtering existing valid tools
 		}
 	}
-	
+
 	return filtered
 }
 
@@ -186,11 +186,11 @@ func (tc *ToolCollection) FindByPrefix(prefix string) []Tool {
 // ToDict converts the collection to a dictionary representation
 func (tc *ToolCollection) ToDict() map[string]interface{} {
 	tools := make(map[string]interface{})
-	
+
 	for name, tool := range tc.ToolsMap {
 		tools[name] = tool.ToDict()
 	}
-	
+
 	return map[string]interface{}{
 		"tools": tools,
 		"count": len(tc.Tools),
@@ -201,12 +201,12 @@ func (tc *ToolCollection) ToDict() map[string]interface{} {
 // FromDict creates a tool collection from a dictionary representation
 func (tc *ToolCollection) FromDict(data map[string]interface{}) error {
 	tc.Clear()
-	
+
 	toolsData, ok := data["tools"].(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid tools data format")
 	}
-	
+
 	// Get ordering if available
 	var order []string
 	if orderData, ok := data["order"].([]interface{}); ok {
@@ -223,7 +223,7 @@ func (tc *ToolCollection) FromDict(data map[string]interface{}) error {
 		}
 		sort.Strings(order)
 	}
-	
+
 	// Add tools in the specified order
 	for _, name := range order {
 		if toolData, exists := toolsData[name]; exists {
@@ -232,14 +232,14 @@ func (tc *ToolCollection) FromDict(data map[string]interface{}) error {
 				if err != nil {
 					return fmt.Errorf("failed to create tool '%s': %w", name, err)
 				}
-				
+
 				if err := tc.Add(tool); err != nil {
 					return fmt.Errorf("failed to add tool '%s': %w", name, err)
 				}
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -253,7 +253,7 @@ func (tc *ToolCollection) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &dict); err != nil {
 		return err
 	}
-	
+
 	return tc.FromDict(dict)
 }
 
@@ -270,19 +270,19 @@ func (tc *ToolCollection) ValidateAll() error {
 // PipelineTool represents a tool that processes data through a pipeline
 type PipelineTool struct {
 	*BaseTool
-	
+
 	// Pipeline configuration
-	ModelClass         string                 `json:"model_class,omitempty"`
-	DefaultCheckpoint  string                 `json:"default_checkpoint,omitempty"`
-	PreProcessorClass  string                 `json:"pre_processor_class,omitempty"`
-	PostProcessorClass string                 `json:"post_processor_class,omitempty"`
-	
+	ModelClass         string `json:"model_class,omitempty"`
+	DefaultCheckpoint  string `json:"default_checkpoint,omitempty"`
+	PreProcessorClass  string `json:"pre_processor_class,omitempty"`
+	PostProcessorClass string `json:"post_processor_class,omitempty"`
+
 	// Runtime components (not serialized)
 	model         interface{} `json:"-"`
 	preProcessor  interface{} `json:"-"`
 	postProcessor interface{} `json:"-"`
 	device        string      `json:"-"`
-	
+
 	// Pipeline functions
 	EncodeFunc func(interface{}) (interface{}, error) `json:"-"`
 	DecodeFunc func(interface{}) (interface{}, error) `json:"-"`
@@ -296,12 +296,12 @@ func NewPipelineTool(
 	options map[string]interface{},
 ) *PipelineTool {
 	baseTool := NewBaseTool(name, description, inputs, outputType)
-	
+
 	pt := &PipelineTool{
 		BaseTool: baseTool,
 		device:   "cpu", // Default device
 	}
-	
+
 	if options != nil {
 		if modelClass, ok := options["model_class"].(string); ok {
 			pt.ModelClass = modelClass
@@ -319,7 +319,7 @@ func NewPipelineTool(
 			pt.device = device
 		}
 	}
-	
+
 	return pt
 }
 
@@ -328,14 +328,14 @@ func (pt *PipelineTool) Setup() error {
 	if pt.isSetup {
 		return nil
 	}
-	
+
 	// This is a placeholder for model loading logic
 	// In a real implementation, this would:
 	// 1. Load the model from the checkpoint
 	// 2. Initialize preprocessor and postprocessor
 	// 3. Move model to specified device
 	// 4. Set up encoding/decoding functions
-	
+
 	pt.isSetup = true
 	return nil
 }
@@ -347,11 +347,11 @@ func (pt *PipelineTool) Encode(input interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("pipeline setup failed: %w", err)
 		}
 	}
-	
+
 	if pt.EncodeFunc != nil {
 		return pt.EncodeFunc(input)
 	}
-	
+
 	// Default encoding (pass-through)
 	return input, nil
 }
@@ -361,7 +361,7 @@ func (pt *PipelineTool) Decode(output interface{}) (interface{}, error) {
 	if pt.DecodeFunc != nil {
 		return pt.DecodeFunc(output)
 	}
-	
+
 	// Default decoding (pass-through)
 	return output, nil
 }
@@ -371,22 +371,22 @@ func (pt *PipelineTool) Forward(args ...interface{}) (interface{}, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("pipeline tool requires at least one input")
 	}
-	
+
 	// Encode input
 	encoded, err := pt.Encode(args[0])
 	if err != nil {
 		return nil, fmt.Errorf("encoding failed: %w", err)
 	}
-	
+
 	// Process (placeholder - in real implementation this would run the model)
 	processed := encoded
-	
+
 	// Decode output
 	decoded, err := pt.Decode(processed)
 	if err != nil {
 		return nil, fmt.Errorf("decoding failed: %w", err)
 	}
-	
+
 	return decoded, nil
 }
 
@@ -485,16 +485,16 @@ func StringTool(name, description string, function func(string) (string, error))
 	inputs := map[string]*ToolInput{
 		"input": NewToolInput("string", "Input text"),
 	}
-	
+
 	return NewFunctionTool(name, description, inputs, "string", func(args ...interface{}) (interface{}, error) {
 		if len(args) == 0 {
 			return function("")
 		}
-		
+
 		if str, ok := args[0].(string); ok {
 			return function(str)
 		}
-		
+
 		return function(fmt.Sprintf("%v", args[0]))
 	})
 }
@@ -504,12 +504,12 @@ func NumberTool(name, description string, function func(float64) (float64, error
 	inputs := map[string]*ToolInput{
 		"input": NewToolInput("number", "Input number"),
 	}
-	
+
 	return NewFunctionTool(name, description, inputs, "number", func(args ...interface{}) (interface{}, error) {
 		if len(args) == 0 {
 			return function(0)
 		}
-		
+
 		switch v := args[0].(type) {
 		case float64:
 			return function(v)

@@ -21,14 +21,14 @@ import (
 
 // RunOptions represents options for agent execution
 type RunOptions struct {
-	Task           string                     `json:"task"`
-	Stream         bool                       `json:"stream,omitempty"`
-	Reset          bool                       `json:"reset,omitempty"`
-	Images         []interface{}              `json:"images,omitempty"`
-	AdditionalArgs map[string]interface{}     `json:"additional_args,omitempty"`
-	MaxSteps       *int                       `json:"max_steps,omitempty"`
-	Context        context.Context            `json:"-"`
-	StepCallbacks  []StepCallback             `json:"-"`
+	Task           string                 `json:"task"`
+	Stream         bool                   `json:"stream,omitempty"`
+	Reset          bool                   `json:"reset,omitempty"`
+	Images         []interface{}          `json:"images,omitempty"`
+	AdditionalArgs map[string]interface{} `json:"additional_args,omitempty"`
+	MaxSteps       *int                   `json:"max_steps,omitempty"`
+	Context        context.Context        `json:"-"`
+	StepCallbacks  []StepCallback         `json:"-"`
 }
 
 // NewRunOptions creates run options with defaults
@@ -47,14 +47,14 @@ type StepCallback func(step memory.MemoryStep) error
 
 // RunResult represents the result of an agent run
 type RunResult struct {
-	Output     interface{}                `json:"output"`
-	State      string                     `json:"state"` // "success", "max_steps_error"
-	Messages   []map[string]interface{}   `json:"messages"`
-	TokenUsage *monitoring.TokenUsage     `json:"token_usage,omitempty"`
-	Timing     *monitoring.Timing         `json:"timing"`
-	StepCount  int                        `json:"step_count"`
-	Metadata   map[string]interface{}     `json:"metadata,omitempty"`
-	Error      error                      `json:"error,omitempty"`
+	Output     interface{}              `json:"output"`
+	State      string                   `json:"state"` // "success", "max_steps_error"
+	Messages   []map[string]interface{} `json:"messages"`
+	TokenUsage *monitoring.TokenUsage   `json:"token_usage,omitempty"`
+	Timing     *monitoring.Timing       `json:"timing"`
+	StepCount  int                      `json:"step_count"`
+	Metadata   map[string]interface{}   `json:"metadata,omitempty"`
+	Error      error                    `json:"error,omitempty"`
 }
 
 // NewRunResult creates a new run result
@@ -72,17 +72,17 @@ type FinalOutput struct {
 
 // PromptTemplates represents the prompt templates for an agent
 type PromptTemplates struct {
-	SystemPrompt   string                        `json:"system_prompt"`
-	Planning       PlanningPromptTemplate        `json:"planning"`
-	ManagedAgent   ManagedAgentPromptTemplate    `json:"managed_agent"`
-	FinalAnswer    FinalAnswerPromptTemplate     `json:"final_answer"`
+	SystemPrompt string                     `json:"system_prompt"`
+	Planning     PlanningPromptTemplate     `json:"planning"`
+	ManagedAgent ManagedAgentPromptTemplate `json:"managed_agent"`
+	FinalAnswer  FinalAnswerPromptTemplate  `json:"final_answer"`
 }
 
 // PlanningPromptTemplate represents planning prompt templates
 type PlanningPromptTemplate struct {
-	InitialPlan         string `json:"initial_plan"`
-	UpdatePlanPreMsg    string `json:"update_plan_pre_messages"`
-	UpdatePlanPostMsg   string `json:"update_plan_post_messages"`
+	InitialPlan       string `json:"initial_plan"`
+	UpdatePlanPreMsg  string `json:"update_plan_pre_messages"`
+	UpdatePlanPostMsg string `json:"update_plan_post_messages"`
 }
 
 // ManagedAgentPromptTemplate represents managed agent prompt templates
@@ -119,12 +119,12 @@ func EmptyPromptTemplates() *PromptTemplates {
 
 // StreamStepResult represents a single step result in streaming mode
 type StreamStepResult struct {
-	StepNumber int                        `json:"step_number"`
-	StepType   string                     `json:"step_type"`
-	Output     interface{}                `json:"output,omitempty"`
-	Error      error                      `json:"error,omitempty"`
-	IsComplete bool                       `json:"is_complete"`
-	Metadata   map[string]interface{}     `json:"metadata,omitempty"`
+	StepNumber int                    `json:"step_number"`
+	StepType   string                 `json:"step_type"`
+	Output     interface{}            `json:"output,omitempty"`
+	Error      error                  `json:"error,omitempty"`
+	IsComplete bool                   `json:"is_complete"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // MultiStepAgent represents the main interface for multi-step agents
@@ -132,11 +132,11 @@ type MultiStepAgent interface {
 	// Core execution methods
 	Run(options *RunOptions) (*RunResult, error)
 	RunStream(options *RunOptions) (<-chan *StreamStepResult, error)
-	
+
 	// Agent management
 	Reset() error
 	Interrupt() error
-	
+
 	// Configuration
 	GetModel() models.Model
 	SetModel(model models.Model)
@@ -148,12 +148,12 @@ type MultiStepAgent interface {
 	SetSystemPrompt(prompt string)
 	GetMaxSteps() int
 	SetMaxSteps(maxSteps int)
-	
+
 	// Serialization
 	ToDict() map[string]interface{}
 	Save(outputDir string, toolFileName string, makeGradioApp bool) error
 	PushToHub(repoID string, commitMessage string, token string, private bool) error
-	
+
 	// Execution state
 	IsRunning() bool
 	GetStepCount() int
@@ -161,26 +161,26 @@ type MultiStepAgent interface {
 
 // BaseMultiStepAgent provides common functionality for all agent implementations
 type BaseMultiStepAgent struct {
-	model           models.Model
-	tools           []tools.Tool
-	toolsMap        map[string]tools.Tool
-	memory          *memory.AgentMemory
-	systemPrompt    string
-	maxSteps        int
-	planning        bool
+	model            models.Model
+	tools            []tools.Tool
+	toolsMap         map[string]tools.Tool
+	memory           *memory.AgentMemory
+	systemPrompt     string
+	maxSteps         int
+	planning         bool
 	planningInterval int
-	promptTemplates *PromptTemplates
-	monitor         *monitoring.Monitor
-	logger          *monitoring.AgentLogger
-	
+	promptTemplates  *PromptTemplates
+	monitor          *monitoring.Monitor
+	logger           *monitoring.AgentLogger
+
 	// State management
-	isRunning    bool
-	stepCount    int
-	interrupted  bool
-	
+	isRunning   bool
+	stepCount   int
+	interrupted bool
+
 	// Managed agents
 	managedAgents map[string]MultiStepAgent
-	
+
 	// Additional configuration
 	additionalArgs map[string]interface{}
 }
@@ -192,43 +192,43 @@ func NewBaseMultiStepAgent(
 	systemPrompt string,
 	options map[string]interface{},
 ) (*BaseMultiStepAgent, error) {
-	
+
 	if model == nil {
 		return nil, utils.NewAgentError("model cannot be nil")
 	}
-	
+
 	// Set up tools
 	agentTools := make([]tools.Tool, 0)
 	toolsMap := make(map[string]tools.Tool)
-	
+
 	if toolsArg != nil {
 		for _, tool := range toolsArg {
 			if tool == nil {
 				continue
 			}
-			
+
 			// Validate tool
 			if err := tool.Validate(); err != nil {
 				return nil, utils.NewAgentError(fmt.Sprintf("invalid tool '%s': %v", tool.GetName(), err))
 			}
-			
+
 			// Check for name conflicts
 			if _, exists := toolsMap[tool.GetName()]; exists {
 				return nil, utils.NewAgentError(fmt.Sprintf("duplicate tool name: %s", tool.GetName()))
 			}
-			
+
 			agentTools = append(agentTools, tool)
 			toolsMap[tool.GetName()] = tool
 		}
 	}
-	
+
 	// Create agent memory
 	agentMemory := memory.NewAgentMemory(systemPrompt)
-	
+
 	// Set up logging and monitoring
 	logger := monitoring.NewAgentLogger(monitoring.LogLevelINFO)
 	monitor := monitoring.NewMonitor(logger)
-	
+
 	agent := &BaseMultiStepAgent{
 		model:            model,
 		tools:            agentTools,
@@ -244,7 +244,7 @@ func NewBaseMultiStepAgent(
 		managedAgents:    make(map[string]MultiStepAgent),
 		additionalArgs:   make(map[string]interface{}),
 	}
-	
+
 	// Apply options
 	if options != nil {
 		if maxSteps, ok := options["max_steps"].(int); ok {
@@ -259,7 +259,7 @@ func NewBaseMultiStepAgent(
 		if templates, ok := options["prompt_templates"].(*PromptTemplates); ok {
 			agent.promptTemplates = templates
 		}
-		
+
 		// Store additional options
 		for k, v := range options {
 			switch k {
@@ -270,7 +270,7 @@ func NewBaseMultiStepAgent(
 			}
 		}
 	}
-	
+
 	return agent, nil
 }
 
@@ -293,7 +293,7 @@ func (ba *BaseMultiStepAgent) GetTools() []tools.Tool {
 func (ba *BaseMultiStepAgent) SetTools(toolsArg []tools.Tool) {
 	ba.tools = make([]tools.Tool, 0)
 	ba.toolsMap = make(map[string]tools.Tool)
-	
+
 	if toolsArg != nil {
 		for _, tool := range toolsArg {
 			if tool != nil {
@@ -343,11 +343,11 @@ func (ba *BaseMultiStepAgent) Reset() error {
 	ba.stepCount = 0
 	ba.isRunning = false
 	ba.interrupted = false
-	
+
 	if ba.monitor != nil {
 		ba.monitor.Reset()
 	}
-	
+
 	return nil
 }
 
@@ -373,7 +373,7 @@ func (ba *BaseMultiStepAgent) ToDict() map[string]interface{} {
 	for i, tool := range ba.tools {
 		toolsData[i] = tool.ToDict()
 	}
-	
+
 	result := map[string]interface{}{
 		"model_id":          ba.model.GetModelID(),
 		"tools":             toolsData,
@@ -384,12 +384,12 @@ func (ba *BaseMultiStepAgent) ToDict() map[string]interface{} {
 		"prompt_templates":  ba.promptTemplates,
 		"step_count":        ba.stepCount,
 	}
-	
+
 	// Add additional args
 	for k, v := range ba.additionalArgs {
 		result[k] = v
 	}
-	
+
 	return result
 }
 
@@ -420,19 +420,19 @@ func (ba *BaseMultiStepAgent) AddTool(tool tools.Tool) error {
 	if tool == nil {
 		return utils.NewAgentError("tool cannot be nil")
 	}
-	
+
 	if err := tool.Validate(); err != nil {
 		return utils.NewAgentError(fmt.Sprintf("invalid tool: %v", err))
 	}
-	
+
 	name := tool.GetName()
 	if _, exists := ba.toolsMap[name]; exists {
 		return utils.NewAgentError(fmt.Sprintf("tool with name '%s' already exists", name))
 	}
-	
+
 	ba.tools = append(ba.tools, tool)
 	ba.toolsMap[name] = tool
-	
+
 	return nil
 }
 
@@ -441,9 +441,9 @@ func (ba *BaseMultiStepAgent) RemoveTool(name string) bool {
 	if _, exists := ba.toolsMap[name]; !exists {
 		return false
 	}
-	
+
 	delete(ba.toolsMap, name)
-	
+
 	// Remove from slice
 	for i, tool := range ba.tools {
 		if tool.GetName() == name {
@@ -451,7 +451,7 @@ func (ba *BaseMultiStepAgent) RemoveTool(name string) bool {
 			break
 		}
 	}
-	
+
 	return true
 }
 
@@ -460,11 +460,11 @@ func (ba *BaseMultiStepAgent) AddManagedAgent(name string, agent MultiStepAgent)
 	if agent == nil {
 		return utils.NewAgentError("managed agent cannot be nil")
 	}
-	
+
 	if _, exists := ba.managedAgents[name]; exists {
 		return utils.NewAgentError(fmt.Sprintf("managed agent with name '%s' already exists", name))
 	}
-	
+
 	ba.managedAgents[name] = agent
 	return nil
 }
@@ -531,14 +531,14 @@ func (ba *BaseMultiStepAgent) GetPromptTemplates() *PromptTemplates {
 // PopulateTemplate fills in template variables using the provided data
 func PopulateTemplate(template string, variables map[string]interface{}) string {
 	result := template
-	
+
 	// Simple template variable replacement using {{variable}} syntax
 	for key, value := range variables {
 		placeholder := fmt.Sprintf("{{%s}}", key)
 		replacement := fmt.Sprintf("%v", value)
 		result = strings.ReplaceAll(result, placeholder, replacement)
 	}
-	
+
 	return result
 }
 
@@ -546,10 +546,10 @@ func PopulateTemplate(template string, variables map[string]interface{}) string 
 func GetVariableNames(template string) []string {
 	pattern := regexp.MustCompile(`\{\{([^{}]+)\}\}`)
 	matches := pattern.FindAllStringSubmatch(template, -1)
-	
+
 	var variables []string
 	seen := make(map[string]bool)
-	
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			variable := strings.TrimSpace(match[1])
@@ -559,7 +559,7 @@ func GetVariableNames(template string) []string {
 			}
 		}
 	}
-	
+
 	return variables
 }
 
@@ -567,16 +567,16 @@ func GetVariableNames(template string) []string {
 
 // AgentConfig represents configuration for creating agents
 type AgentConfig struct {
-	Model           models.Model               `json:"-"`
-	Tools           []tools.Tool               `json:"-"`
-	SystemPrompt    string                     `json:"system_prompt"`
-	MaxSteps        int                        `json:"max_steps"`
-	Planning        bool                       `json:"planning"`
-	PlanningInterval int                       `json:"planning_interval"`
-	PromptTemplates *PromptTemplates           `json:"prompt_templates"`
-	Logger          *monitoring.AgentLogger    `json:"-"`
-	Monitor         *monitoring.Monitor        `json:"-"`
-	Additional      map[string]interface{}     `json:"additional"`
+	Model            models.Model            `json:"-"`
+	Tools            []tools.Tool            `json:"-"`
+	SystemPrompt     string                  `json:"system_prompt"`
+	MaxSteps         int                     `json:"max_steps"`
+	Planning         bool                    `json:"planning"`
+	PlanningInterval int                     `json:"planning_interval"`
+	PromptTemplates  *PromptTemplates        `json:"prompt_templates"`
+	Logger           *monitoring.AgentLogger `json:"-"`
+	Monitor          *monitoring.Monitor     `json:"-"`
+	Additional       map[string]interface{}  `json:"additional"`
 }
 
 // DefaultAgentConfig returns a default agent configuration
@@ -595,22 +595,22 @@ func CreateAgent(config *AgentConfig, agentType string) (MultiStepAgent, error) 
 	if config == nil {
 		return nil, utils.NewAgentError("agent config cannot be nil")
 	}
-	
+
 	if config.Model == nil {
 		return nil, utils.NewAgentError("model cannot be nil")
 	}
-	
+
 	options := make(map[string]interface{})
 	options["max_steps"] = config.MaxSteps
 	options["planning"] = config.Planning
 	options["planning_interval"] = config.PlanningInterval
 	options["prompt_templates"] = config.PromptTemplates
-	
+
 	// Add additional options
 	for k, v := range config.Additional {
 		options[k] = v
 	}
-	
+
 	switch agentType {
 	case "tool_calling":
 		return NewToolCallingAgent(config.Model, config.Tools, config.SystemPrompt, options)

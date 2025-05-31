@@ -55,7 +55,7 @@ func NewRemoteExecutor(servers []string, options map[string]interface{}) *Remote
 			Timeout: 35 * time.Second,
 		},
 	}
-	
+
 	if options != nil {
 		if timeout, ok := options["timeout"].(time.Duration); ok {
 			executor.timeout = timeout
@@ -68,7 +68,7 @@ func NewRemoteExecutor(servers []string, options map[string]interface{}) *Remote
 			executor.capabilities = capabilities
 		}
 	}
-	
+
 	return executor
 }
 
@@ -77,7 +77,7 @@ func (re *RemoteExecutor) Execute(language, code string, options map[string]inte
 	if len(re.servers) == 0 {
 		return nil, fmt.Errorf("no remote execution servers configured")
 	}
-	
+
 	// Prepare execution request
 	request := &RemoteExecutionRequest{
 		ID:       fmt.Sprintf("exec_%d", time.Now().UnixNano()),
@@ -87,7 +87,7 @@ func (re *RemoteExecutor) Execute(language, code string, options map[string]inte
 		Env:      make(map[string]string),
 		Files:    make(map[string]string),
 	}
-	
+
 	// Add environment variables and files from options
 	if options != nil {
 		if env, ok := options["env"].(map[string]string); ok {
@@ -100,33 +100,33 @@ func (re *RemoteExecutor) Execute(language, code string, options map[string]inte
 			request.Timeout = timeout
 		}
 	}
-	
+
 	// Try executing on available servers with retries
 	var lastError error
 	for attempt := 0; attempt < re.maxRetries; attempt++ {
 		server := re.getNextServer()
-		
+
 		response, err := re.executeOnServer(server, request)
 		if err != nil {
 			lastError = err
 			continue
 		}
-		
+
 		// Convert response to ExecutionResult
 		result := &ExecutionResult{
-			Output:    response.Output,
-			ExitCode:  response.ExitCode,
-			Duration:  time.Duration(response.Duration) * time.Millisecond,
-			Stdout:    response.Output,
+			Output:   response.Output,
+			ExitCode: response.ExitCode,
+			Duration: time.Duration(response.Duration) * time.Millisecond,
+			Stdout:   response.Output,
 		}
-		
+
 		if !response.Success && response.Error != "" {
 			result.Stderr = response.Error
 		}
-		
+
 		return result, nil
 	}
-	
+
 	return nil, fmt.Errorf("failed to execute on any server after %d attempts, last error: %w", re.maxRetries, lastError)
 }
 
@@ -137,45 +137,45 @@ func (re *RemoteExecutor) executeOnServer(server string, request *RemoteExecutio
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/execute", server)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
-	
+
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "smolagents-remote-executor/1.0")
-	
+
 	// Add timeout context
 	ctx, cancel := context.WithTimeout(context.Background(), re.timeout)
 	defer cancel()
 	httpReq = httpReq.WithContext(ctx)
-	
+
 	// Make the request
 	resp, err := re.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse response
 	var response RemoteExecutionResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	return &response, nil
 }
 
@@ -183,7 +183,7 @@ func (re *RemoteExecutor) executeOnServer(server string, request *RemoteExecutio
 func (re *RemoteExecutor) getNextServer() string {
 	re.mu.Lock()
 	defer re.mu.Unlock()
-	
+
 	server := re.servers[re.roundRobin%len(re.servers)]
 	re.roundRobin++
 	return server
@@ -207,20 +207,20 @@ func (re *RemoteExecutor) HealthCheck() map[string]bool {
 	results := make(map[string]bool)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	
+
 	for _, server := range re.servers {
 		wg.Add(1)
 		go func(srv string) {
 			defer wg.Done()
-			
+
 			healthy := re.checkServerHealth(srv)
-			
+
 			mu.Lock()
 			results[srv] = healthy
 			mu.Unlock()
 		}(server)
 	}
-	
+
 	wg.Wait()
 	return results
 }
@@ -228,21 +228,21 @@ func (re *RemoteExecutor) HealthCheck() map[string]bool {
 // checkServerHealth checks if a specific server is healthy
 func (re *RemoteExecutor) checkServerHealth(server string) bool {
 	url := fmt.Sprintf("%s/health", server)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return false
 	}
-	
+
 	resp, err := re.client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
-	
+
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -250,20 +250,20 @@ func (re *RemoteExecutor) checkServerHealth(server string) bool {
 func (re *RemoteExecutor) GetHealthyServers() []string {
 	healthCheck := re.HealthCheck()
 	var healthy []string
-	
+
 	for server, isHealthy := range healthCheck {
 		if isHealthy {
 			healthy = append(healthy, server)
 		}
 	}
-	
+
 	return healthy
 }
 
 // RemoteExecutorPool manages multiple remote executors for different languages
 type RemoteExecutorPool struct {
-	executors map[string]*RemoteExecutor // Language -> RemoteExecutor
-	defaultConfig map[string]interface{} // Default configuration
+	executors     map[string]*RemoteExecutor // Language -> RemoteExecutor
+	defaultConfig map[string]interface{}     // Default configuration
 }
 
 // NewRemoteExecutorPool creates a new remote executor pool
@@ -272,14 +272,14 @@ func NewRemoteExecutorPool(config map[string]interface{}) *RemoteExecutorPool {
 		executors:     make(map[string]*RemoteExecutor),
 		defaultConfig: config,
 	}
-	
+
 	// Initialize default executors if servers are provided
 	if servers, ok := config["default_servers"].([]string); ok {
 		for _, lang := range []string{"python", "javascript", "go", "rust"} {
 			pool.executors[lang] = NewRemoteExecutor(servers, config)
 		}
 	}
-	
+
 	return pool
 }
 
@@ -297,7 +297,7 @@ func (rep *RemoteExecutorPool) Execute(language, code string, options map[string
 	if !exists {
 		return nil, fmt.Errorf("no remote executor configured for language: %s", language)
 	}
-	
+
 	return executor.Execute(language, code, options)
 }
 
@@ -313,7 +313,7 @@ func (rep *RemoteExecutorPool) GetAvailableLanguages() []string {
 // GetPoolStatus returns the status of all executors in the pool
 func (rep *RemoteExecutorPool) GetPoolStatus() map[string]map[string]interface{} {
 	status := make(map[string]map[string]interface{})
-	
+
 	for lang, executor := range rep.executors {
 		healthCheck := executor.HealthCheck()
 		healthyCount := 0
@@ -322,7 +322,7 @@ func (rep *RemoteExecutorPool) GetPoolStatus() map[string]map[string]interface{}
 				healthyCount++
 			}
 		}
-		
+
 		status[lang] = map[string]interface{}{
 			"total_servers":   len(executor.servers),
 			"healthy_servers": healthyCount,
@@ -330,7 +330,7 @@ func (rep *RemoteExecutorPool) GetPoolStatus() map[string]map[string]interface{}
 			"capabilities":    executor.GetCapabilities(),
 		}
 	}
-	
+
 	return status
 }
 
@@ -356,7 +356,7 @@ func (gew *GoExecutorWrapper) Execute(language, code string, options map[string]
 			Duration: 0,
 		}, err
 	}
-	
+
 	// Convert the result to ExecutionResult format
 	return &ExecutionResult{
 		Output:    result,
@@ -369,9 +369,9 @@ func (gew *GoExecutorWrapper) Execute(language, code string, options map[string]
 
 // MockRemoteExecutionServer provides a simple mock server for testing
 type MockRemoteExecutionServer struct {
-	port         int
-	executors    map[string]ExecutorInterface
-	server       *http.Server
+	port      int
+	executors map[string]ExecutorInterface
+	server    *http.Server
 }
 
 // NewMockRemoteExecutionServer creates a new mock server
@@ -380,31 +380,31 @@ func NewMockRemoteExecutionServer(port int) *MockRemoteExecutionServer {
 		port:      port,
 		executors: make(map[string]ExecutorInterface),
 	}
-	
+
 	// Add default executors
 	goExecutor, _ := NewGoExecutor() // Use Go executor as fallback
-	
+
 	// Create wrapper for Go executor to match interface
 	goWrapper := &GoExecutorWrapper{executor: goExecutor}
 	mock.executors["python"] = goWrapper
 	mock.executors["go"] = goWrapper
-	
+
 	return mock
 }
 
 // Start starts the mock server
 func (mrs *MockRemoteExecutionServer) Start() error {
 	mux := http.NewServeMux()
-	
+
 	mux.HandleFunc("/execute", mrs.handleExecute)
 	mux.HandleFunc("/health", mrs.handleHealth)
 	mux.HandleFunc("/capabilities", mrs.handleCapabilities)
-	
+
 	mrs.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", mrs.port),
 		Handler: mux,
 	}
-	
+
 	return mrs.server.ListenAndServe()
 }
 
@@ -422,14 +422,14 @@ func (mrs *MockRemoteExecutionServer) handleExecute(w http.ResponseWriter, r *ht
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Parse request
 	var request RemoteExecutionRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Get executor for language
 	executor, exists := mrs.executors[request.Language]
 	if !exists {
@@ -441,20 +441,20 @@ func (mrs *MockRemoteExecutionServer) handleExecute(w http.ResponseWriter, r *ht
 		mrs.sendJSONResponse(w, response)
 		return
 	}
-	
+
 	// Execute code
 	start := time.Now()
 	result, err := executor.Execute(request.Language, request.Code, map[string]interface{}{
 		"timeout": time.Duration(request.Timeout) * time.Second,
 	})
 	duration := time.Since(start)
-	
+
 	// Prepare response
 	response := RemoteExecutionResponse{
 		ID:       request.ID,
 		Duration: duration.Milliseconds(),
 	}
-	
+
 	if err != nil {
 		response.Success = false
 		response.Error = err.Error()
@@ -471,7 +471,7 @@ func (mrs *MockRemoteExecutionServer) handleExecute(w http.ResponseWriter, r *ht
 			response.Error = result.Stderr
 		}
 	}
-	
+
 	mrs.sendJSONResponse(w, response)
 }
 
@@ -480,7 +480,7 @@ func (mrs *MockRemoteExecutionServer) handleHealth(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "healthy",
+		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
 	})
 }
@@ -489,10 +489,10 @@ func (mrs *MockRemoteExecutionServer) handleHealth(w http.ResponseWriter, r *htt
 func (mrs *MockRemoteExecutionServer) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	capabilities := map[string]interface{}{
 		"languages": []string{"python", "go"},
-		"features": []string{"timeout", "environment", "files"},
-		"version": "1.0.0",
+		"features":  []string{"timeout", "environment", "files"},
+		"version":   "1.0.0",
 	}
-	
+
 	mrs.sendJSONResponse(w, capabilities)
 }
 

@@ -59,20 +59,20 @@ func (m *MockModel) SetMaxTokens(maxTokens int) {}
 func TestNewCodeAgent(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	if agent == nil {
 		t.Fatal("Expected non-nil agent")
 	}
-	
+
 	if agent.goInterpreter == nil {
 		t.Error("Expected Go interpreter to be set")
 	}
-	
+
 	if len(agent.authorizedPackages) == 0 {
 		t.Error("Expected default authorized packages")
 	}
@@ -87,24 +87,24 @@ func TestCodeAgentWithOptions(t *testing.T) {
 		"stream_outputs":      false,
 		"structured_output":   true,
 	}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", options)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent with options: %v", err)
 	}
-	
+
 	if len(agent.authorizedPackages) != 2 {
 		t.Errorf("Expected 2 authorized packages, got %d", len(agent.authorizedPackages))
 	}
-	
+
 	if agent.maxCodeLength != 5000 {
 		t.Errorf("Expected max code length 5000, got %d", agent.maxCodeLength)
 	}
-	
+
 	if agent.streamOutputs != false {
 		t.Error("Expected stream outputs to be false")
 	}
-	
+
 	if agent.structuredOutput != true {
 		t.Error("Expected structured output to be true")
 	}
@@ -113,12 +113,12 @@ func TestCodeAgentWithOptions(t *testing.T) {
 func TestNewCodeAgentSimple(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgentSimple(tools, model)
 	if err != nil {
 		t.Fatalf("Failed to create simple CodeAgent: %v", err)
 	}
-	
+
 	if agent == nil {
 		t.Fatal("Expected non-nil agent")
 	}
@@ -128,12 +128,12 @@ func TestCodeAgentSystemPrompt(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
 	customPrompt := "Custom system prompt"
-	
+
 	agent, err := NewCodeAgent(model, tools, customPrompt, nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	if agent.GetSystemPrompt() != customPrompt {
 		t.Error("Custom system prompt not set correctly")
 	}
@@ -142,22 +142,22 @@ func TestCodeAgentSystemPrompt(t *testing.T) {
 func TestCodeAgentAuthorizedPackages(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test getter
 	packages := agent.GetAuthorizedPackages()
 	if len(packages) == 0 {
 		t.Error("Expected non-empty authorized packages")
 	}
-	
+
 	// Test setter
 	newPackages := []string{"fmt", "math", "strings"}
 	agent.SetAuthorizedPackages(newPackages)
-	
+
 	if len(agent.GetAuthorizedPackages()) != 3 {
 		t.Error("Authorized packages not updated correctly")
 	}
@@ -166,17 +166,17 @@ func TestCodeAgentAuthorizedPackages(t *testing.T) {
 func TestCodeAgentStreamOutputs(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test default value
 	if !agent.GetStreamOutputs() {
 		t.Error("Expected default stream outputs to be true")
 	}
-	
+
 	// Test setter
 	agent.SetStreamOutputs(false)
 	if agent.GetStreamOutputs() {
@@ -187,17 +187,17 @@ func TestCodeAgentStreamOutputs(t *testing.T) {
 func TestCodeAgentStructuredOutput(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test default value
 	if agent.GetStructuredOutput() {
 		t.Error("Expected default structured output to be false")
 	}
-	
+
 	// Test setter
 	agent.SetStructuredOutput(true)
 	if !agent.GetStructuredOutput() {
@@ -208,17 +208,17 @@ func TestCodeAgentStructuredOutput(t *testing.T) {
 func TestCodeAgentMaxCodeLength(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test default value
 	if agent.GetMaxCodeLength() != 10000 {
 		t.Errorf("Expected default max code length 10000, got %d", agent.GetMaxCodeLength())
 	}
-	
+
 	// Test setter
 	agent.SetMaxCodeLength(5000)
 	if agent.GetMaxCodeLength() != 5000 {
@@ -229,30 +229,30 @@ func TestCodeAgentMaxCodeLength(t *testing.T) {
 func TestCodeAgentToDict(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	dict := agent.ToDict()
-	
+
 	if dict["agent_type"] != "code" {
 		t.Error("Agent type not set correctly in ToDict")
 	}
-	
+
 	if dict["authorized_packages"] == nil {
 		t.Error("Authorized packages not included in ToDict")
 	}
-	
+
 	if dict["stream_outputs"] == nil {
 		t.Error("Stream outputs not included in ToDict")
 	}
-	
+
 	if dict["structured_output"] == nil {
 		t.Error("Structured output not included in ToDict")
 	}
-	
+
 	if dict["max_code_length"] == nil {
 		t.Error("Max code length not included in ToDict")
 	}
@@ -261,18 +261,18 @@ func TestCodeAgentToDict(t *testing.T) {
 func TestCodeAgentExecuteCode(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test code execution
 	result, err := agent.ExecuteCode("result := 2 + 3")
 	if err != nil {
 		t.Errorf("Failed to execute code: %v", err)
 	}
-	
+
 	if result == nil {
 		t.Error("Expected non-nil result")
 	}
@@ -284,12 +284,12 @@ func TestCodeAgentCodeTooLong(t *testing.T) {
 	options := map[string]interface{}{
 		"max_code_length": 10,
 	}
-	
+
 	agent, err := NewCodeAgent(model, tools, "", options)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	// Test code that's too long
 	longCode := "This is a very long code snippet that exceeds the maximum length"
 	_, err = agent.ExecuteCode(longCode)
@@ -301,26 +301,26 @@ func TestCodeAgentCodeTooLong(t *testing.T) {
 func TestCodeAgentClone(t *testing.T) {
 	model := &MockModel{}
 	tools := []tools.Tool{}
-	
+
 	original, err := NewCodeAgent(model, tools, "", nil)
 	if err != nil {
 		t.Fatalf("Failed to create CodeAgent: %v", err)
 	}
-	
+
 	clone, err := original.Clone()
 	if err != nil {
 		t.Fatalf("Failed to clone CodeAgent: %v", err)
 	}
-	
+
 	if clone == nil {
 		t.Fatal("Expected non-nil clone")
 	}
-	
+
 	// Verify that clone has same configuration
 	if len(clone.GetAuthorizedPackages()) != len(original.GetAuthorizedPackages()) {
 		t.Error("Clone doesn't have same authorized packages")
 	}
-	
+
 	if clone.GetMaxCodeLength() != original.GetMaxCodeLength() {
 		t.Error("Clone doesn't have same max code length")
 	}

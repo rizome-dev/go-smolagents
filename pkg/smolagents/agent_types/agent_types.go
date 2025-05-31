@@ -24,10 +24,10 @@ import (
 type AgentType interface {
 	// ToRaw returns the "raw" version of the object
 	ToRaw() interface{}
-	
+
 	// ToString returns the stringified version of the object
 	ToString() string
-	
+
 	// String implements the Stringer interface
 	String() string
 }
@@ -73,18 +73,18 @@ type AgentImage struct {
 // NewAgentImage creates a new AgentImage instance
 func NewAgentImage(value interface{}) (*AgentImage, error) {
 	ai := &AgentImage{value: value}
-	
+
 	switch v := value.(type) {
 	case *AgentImage:
 		ai.rawImg = v.rawImg
 		ai.path = v.path
 		ai.tensor = v.tensor
 		return ai, nil
-		
+
 	case image.Image:
 		ai.rawImg = v
 		return ai, nil
-		
+
 	case []byte:
 		img, _, err := image.Decode(bytes.NewReader(v))
 		if err != nil {
@@ -92,11 +92,11 @@ func NewAgentImage(value interface{}) (*AgentImage, error) {
 		}
 		ai.rawImg = img
 		return ai, nil
-		
+
 	case string:
 		ai.path = v
 		return ai, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported type for AgentImage: %T", value)
 	}
@@ -107,7 +107,7 @@ func (ai *AgentImage) ToRaw() interface{} {
 	if ai.rawImg != nil {
 		return ai.rawImg
 	}
-	
+
 	if ai.path != "" {
 		file, err := os.Open(ai.path)
 		if err != nil {
@@ -115,24 +115,24 @@ func (ai *AgentImage) ToRaw() interface{} {
 			return nil
 		}
 		defer file.Close()
-		
+
 		img, _, err := image.Decode(file)
 		if err != nil {
 			log.Printf("Error decoding image file %s: %v", ai.path, err)
 			return nil
 		}
-		
+
 		ai.rawImg = img
 		return ai.rawImg
 	}
-	
+
 	if ai.tensor != nil {
 		// Handle tensor conversion if needed
 		// This would require additional dependencies for tensor operations
 		log.Printf("Tensor to image conversion not implemented")
 		return nil
 	}
-	
+
 	return nil
 }
 
@@ -141,35 +141,35 @@ func (ai *AgentImage) ToString() string {
 	if ai.path != "" {
 		return ai.path
 	}
-	
+
 	if ai.rawImg != nil {
 		// Create temporary file
 		tempDir := os.TempDir()
 		filename := fmt.Sprintf("agent_image_%s.png", ai.generateID())
 		ai.path = filepath.Join(tempDir, filename)
-		
+
 		file, err := os.Create(ai.path)
 		if err != nil {
 			log.Printf("Error creating temp image file: %v", err)
 			return ""
 		}
 		defer file.Close()
-		
+
 		err = png.Encode(file, ai.rawImg)
 		if err != nil {
 			log.Printf("Error encoding image to PNG: %v", err)
 			return ""
 		}
-		
+
 		return ai.path
 	}
-	
+
 	if ai.tensor != nil {
 		// Handle tensor to image conversion and save
 		log.Printf("Tensor to image conversion not implemented")
 		return ""
 	}
-	
+
 	return ""
 }
 
@@ -184,12 +184,12 @@ func (ai *AgentImage) Save(w io.Writer, format string) error {
 	if img == nil {
 		return fmt.Errorf("no image data available")
 	}
-	
+
 	rawImg, ok := img.(image.Image)
 	if !ok {
 		return fmt.Errorf("invalid image data type")
 	}
-	
+
 	switch strings.ToLower(format) {
 	case "png":
 		return png.Encode(w, rawImg)
@@ -219,28 +219,28 @@ func NewAgentAudio(value interface{}, sampleRate ...int) (*AgentAudio, error) {
 	if len(sampleRate) > 0 {
 		defaultSampleRate = sampleRate[0]
 	}
-	
+
 	aa := &AgentAudio{
 		value:      value,
 		sampleRate: defaultSampleRate,
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		aa.path = v
 		return aa, nil
-		
+
 	case []float32, []float64:
 		aa.tensor = v
 		return aa, nil
-		
+
 	case [2]interface{}: // tuple-like structure (samplerate, data)
 		if rate, ok := v[0].(int); ok {
 			aa.sampleRate = rate
 		}
 		aa.tensor = v[1]
 		return aa, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported type for AgentAudio: %T", value)
 	}
@@ -251,13 +251,13 @@ func (aa *AgentAudio) ToRaw() interface{} {
 	if aa.tensor != nil {
 		return aa.tensor
 	}
-	
+
 	if aa.path != "" {
 		// Load audio file - this would require additional audio processing libraries
 		log.Printf("Audio file loading not implemented for path: %s", aa.path)
 		return nil
 	}
-	
+
 	return nil
 }
 
@@ -266,18 +266,18 @@ func (aa *AgentAudio) ToString() string {
 	if aa.path != "" {
 		return aa.path
 	}
-	
+
 	if aa.tensor != nil {
 		// Create temporary file and save audio data
 		tempDir := os.TempDir()
 		filename := fmt.Sprintf("agent_audio_%s.wav", aa.generateID())
 		aa.path = filepath.Join(tempDir, filename)
-		
+
 		// Audio encoding would require additional libraries
 		log.Printf("Audio tensor to file conversion not implemented")
 		return aa.path
 	}
-	
+
 	return ""
 }
 
@@ -307,7 +307,7 @@ func HandleAgentInputTypes(args []interface{}, kwargs map[string]interface{}) ([
 			newArgs[i] = arg
 		}
 	}
-	
+
 	// Convert kwargs
 	newKwargs := make(map[string]interface{})
 	for k, v := range kwargs {
@@ -317,7 +317,7 @@ func HandleAgentInputTypes(args []interface{}, kwargs map[string]interface{}) ([
 			newKwargs[k] = v
 		}
 	}
-	
+
 	return newArgs, newKwargs
 }
 
@@ -338,7 +338,7 @@ func HandleAgentOutputTypes(output interface{}, outputType string) interface{} {
 			return audio
 		}
 	}
-	
+
 	// Auto-detect type if no specific output type specified
 	switch v := output.(type) {
 	case string:
@@ -353,7 +353,7 @@ func HandleAgentOutputTypes(output interface{}, outputType string) interface{} {
 			return img
 		}
 	}
-	
+
 	// Return as-is if no conversion applies
 	return output
 }

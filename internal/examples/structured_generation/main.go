@@ -22,10 +22,10 @@ type Task struct {
 
 // AnalysisResult represents a structured analysis output
 type AnalysisResult struct {
-	Summary      string             `json:"summary"`
-	KeyPoints    []string           `json:"key_points"`
-	Confidence   float64            `json:"confidence"`
-	Metadata     map[string]interface{} `json:"metadata"`
+	Summary    string                 `json:"summary"`
+	KeyPoints  []string               `json:"key_points"`
+	Confidence float64                `json:"confidence"`
+	Metadata   map[string]interface{} `json:"metadata"`
 }
 
 func main() {
@@ -113,7 +113,7 @@ func demonstrateJSONSchema(model models.Model) {
 		"Schema for creating a new task",
 		Task{
 			ID:          "string",
-			Title:       "string", 
+			Title:       "string",
 			Description: "string",
 			Priority:    "string",
 			Tags:        []string{},
@@ -160,7 +160,7 @@ func demonstrateJSONSchema(model models.Model) {
 
 	fmt.Printf("Generated Task JSON: %s\n", structuredOutput.Raw)
 	fmt.Printf("Schema Valid: %t\n", structuredOutput.Valid)
-	
+
 	// Parse into Go struct
 	var task Task
 	if taskData, ok := structuredOutput.Content.(map[string]interface{}); ok {
@@ -173,16 +173,16 @@ func demonstrateJSONSchema(model models.Model) {
 func demonstrateTaskCreation(model models.Model) {
 	// Create validator and register schema
 	validator := models.NewSchemaValidator()
-	
+
 	taskSchema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
 			"id": map[string]interface{}{
-				"type": "string",
+				"type":    "string",
 				"pattern": "^task-[0-9]+$",
 			},
 			"title": map[string]interface{}{
-				"type": "string",
+				"type":      "string",
 				"minLength": 5,
 				"maxLength": 100,
 			},
@@ -199,7 +199,7 @@ func demonstrateTaskCreation(model models.Model) {
 		Schema: taskSchema,
 		Strict: true,
 	}
-	
+
 	validator.RegisterSchema(schema)
 
 	// Test validation with sample data

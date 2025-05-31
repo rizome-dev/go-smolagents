@@ -15,11 +15,11 @@ func TestSchemaValidator(t *testing.T) {
 			"type": "object",
 			"properties": map[string]interface{}{
 				"name": map[string]interface{}{
-					"type": "string",
+					"type":      "string",
 					"minLength": 2,
 				},
 				"age": map[string]interface{}{
-					"type": "integer", 
+					"type":    "integer",
 					"minimum": 0,
 				},
 			},
@@ -110,10 +110,10 @@ func TestStringValidation(t *testing.T) {
 	stringSchema := &JSONSchema{
 		Name: "test_string",
 		Schema: map[string]interface{}{
-			"type": "string",
+			"type":      "string",
 			"minLength": 3,
 			"maxLength": 10,
-			"enum": []interface{}{"short", "medium", "long"},
+			"enum":      []interface{}{"short", "medium", "long"},
 		},
 	}
 
@@ -144,9 +144,9 @@ func TestNumberValidation(t *testing.T) {
 	numberSchema := &JSONSchema{
 		Name: "test_number",
 		Schema: map[string]interface{}{
-			"type": "number",
-			"minimum": 0,
-			"maximum": 100,
+			"type":       "number",
+			"minimum":    0,
+			"maximum":    100,
 			"multipleOf": 5,
 		},
 	}
@@ -187,7 +187,7 @@ func TestStructuredGenerator(t *testing.T) {
 	}
 
 	jsonOutput := `{"name": "John", "age": 30, "city": "New York"}`
-	
+
 	result, err := generator.ParseStructuredOutput(jsonOutput, jsonObjectFormat)
 	if err != nil {
 		t.Errorf("Failed to parse JSON object: %v", err)
@@ -209,7 +209,7 @@ func TestJSONExtraction(t *testing.T) {
 	markdownInput := "```json\n{\"key\": \"value\"}\n```"
 	extracted := generator.extractJSON(markdownInput)
 	expected := "{\"key\": \"value\"}"
-	
+
 	if extracted != expected {
 		t.Errorf("Expected %q, got %q", expected, extracted)
 	}
@@ -218,7 +218,7 @@ func TestJSONExtraction(t *testing.T) {
 	jsonInput := `Here is the result: {"answer": 42} and that's it.`
 	extracted = generator.extractJSON(jsonInput)
 	expected = `{"answer": 42}`
-	
+
 	if extracted != expected {
 		t.Errorf("Expected %q, got %q", expected, extracted)
 	}
@@ -229,7 +229,7 @@ func TestResponseFormatConversion(t *testing.T) {
 
 	// Test JSON schema format conversion
 	schema := &JSONSchema{
-		Name: "test_schema",
+		Name:        "test_schema",
 		Description: "A test schema",
 		Schema: map[string]interface{}{
 			"type": "object",
@@ -243,13 +243,13 @@ func TestResponseFormatConversion(t *testing.T) {
 	}
 
 	format := &ResponseFormat{
-		Type: "json_schema",
+		Type:       "json_schema",
 		JSONSchema: schema,
-		Strict: true,
+		Strict:     true,
 	}
 
 	converted := baseModel.ConvertResponseFormat(format)
-	
+
 	if converted["type"] != "json_schema" {
 		t.Errorf("Expected type json_schema, got %v", converted["type"])
 	}
@@ -271,10 +271,10 @@ func TestResponseFormatConversion(t *testing.T) {
 func TestCreateJSONSchema(t *testing.T) {
 	// Test schema creation from struct
 	type TestStruct struct {
-		Name    string   `json:"name"`
-		Age     int      `json:"age"`
-		Tags    []string `json:"tags"`
-		Active  bool     `json:"active"`
+		Name   string   `json:"name"`
+		Age    int      `json:"age"`
+		Tags   []string `json:"tags"`
+		Active bool     `json:"active"`
 	}
 
 	example := TestStruct{
@@ -285,7 +285,7 @@ func TestCreateJSONSchema(t *testing.T) {
 	}
 
 	schema := CreateJSONSchema("test_struct", "A test structure", example)
-	
+
 	if schema.Name != "test_struct" {
 		t.Errorf("Expected schema name test_struct, got %s", schema.Name)
 	}
@@ -310,7 +310,7 @@ func TestCreateJSONSchema(t *testing.T) {
 
 func TestToolCallSchema(t *testing.T) {
 	schema := CreateToolCallSchema()
-	
+
 	if schema.Name != "tool_calls" {
 		t.Errorf("Expected schema name tool_calls, got %s", schema.Name)
 	}
@@ -343,7 +343,7 @@ func TestToolCallSchema(t *testing.T) {
 
 func TestFunctionCallSchema(t *testing.T) {
 	schema := CreateFunctionCallSchema()
-	
+
 	if schema.Name != "function_call" {
 		t.Errorf("Expected schema name function_call, got %s", schema.Name)
 	}
@@ -355,7 +355,7 @@ func TestFunctionCallSchema(t *testing.T) {
 	// Test valid function call data
 	validFunctionCall := map[string]interface{}{
 		"function_call": map[string]interface{}{
-			"name": "get_weather",
+			"name":      "get_weather",
 			"arguments": `{"location": "San Francisco"}`,
 		},
 	}
@@ -370,15 +370,15 @@ func TestStructuredPromptGeneration(t *testing.T) {
 	generator := NewStructuredGenerator()
 
 	basePrompt := "Analyze the following data"
-	
+
 	// Test JSON object format
 	jsonFormat := &ResponseFormat{
-		Type: "json_object",
+		Type:        "json_object",
 		Description: "Return results as a JSON object",
 	}
 
 	structuredPrompt := generator.GenerateStructuredPrompt(basePrompt, jsonFormat)
-	
+
 	if !contains(structuredPrompt, basePrompt) {
 		t.Error("Expected structured prompt to contain base prompt")
 	}
@@ -389,7 +389,7 @@ func TestStructuredPromptGeneration(t *testing.T) {
 
 	// Test JSON schema format
 	schema := &JSONSchema{
-		Name: "analysis",
+		Name:        "analysis",
 		Description: "Analysis results schema",
 		Schema: map[string]interface{}{
 			"type": "object",
@@ -402,13 +402,13 @@ func TestStructuredPromptGeneration(t *testing.T) {
 	}
 
 	schemaFormat := &ResponseFormat{
-		Type: "json_schema",
+		Type:       "json_schema",
 		JSONSchema: schema,
-		Strict: true,
+		Strict:     true,
 	}
 
 	structuredPrompt = generator.GenerateStructuredPrompt(basePrompt, schemaFormat)
-	
+
 	if !contains(structuredPrompt, "schema") {
 		t.Error("Expected structured prompt to mention schema")
 	}
@@ -421,14 +421,14 @@ func TestStructuredPromptGeneration(t *testing.T) {
 func TestGenerateSchemaFromValue(t *testing.T) {
 	// Test map generation
 	testMap := map[string]interface{}{
-		"name": "test",
-		"count": 42,
+		"name":   "test",
+		"count":  42,
 		"active": true,
-		"tags": []interface{}{"tag1", "tag2"},
+		"tags":   []interface{}{"tag1", "tag2"},
 	}
 
 	schema := generateSchemaFromValue(testMap)
-	
+
 	if schema["type"] != "object" {
 		t.Errorf("Expected type object, got %v", schema["type"])
 	}
@@ -474,8 +474,8 @@ func TestGenerateSchemaFromValue(t *testing.T) {
 
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (len(substr) == 0 || 
-		    s[:len(substr)] == substr || 
-		    (len(s) > len(substr) && contains(s[1:], substr)))
+	return len(s) >= len(substr) &&
+		(len(substr) == 0 ||
+			s[:len(substr)] == substr ||
+			(len(s) > len(substr) && contains(s[1:], substr)))
 }

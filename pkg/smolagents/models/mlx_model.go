@@ -19,24 +19,24 @@ import (
 // MLXModel represents a model using MLX for Apple Silicon
 type MLXModel struct {
 	*BaseModel
-	ModelPath           string                 `json:"model_path"`
-	TokenizerPath       string                 `json:"tokenizer_path"`
-	TrustRemoteCode     bool                   `json:"trust_remote_code"`
-	MaxTokens           int                    `json:"max_tokens"`
-	Temperature         float64                `json:"temperature"`
-	TorchDtype          string                 `json:"torch_dtype"`
-	DeviceMap           string                 `json:"device_map"`
-	ModelKwargs         map[string]interface{} `json:"model_kwargs"`
-	TokenizerKwargs     map[string]interface{} `json:"tokenizer_kwargs"`
-	mlxLMPath           string                 // Path to mlx-lm executable
-	pythonPath          string                 // Path to Python executable
+	ModelPath       string                 `json:"model_path"`
+	TokenizerPath   string                 `json:"tokenizer_path"`
+	TrustRemoteCode bool                   `json:"trust_remote_code"`
+	MaxTokens       int                    `json:"max_tokens"`
+	Temperature     float64                `json:"temperature"`
+	TorchDtype      string                 `json:"torch_dtype"`
+	DeviceMap       string                 `json:"device_map"`
+	ModelKwargs     map[string]interface{} `json:"model_kwargs"`
+	TokenizerKwargs map[string]interface{} `json:"tokenizer_kwargs"`
+	mlxLMPath       string                 // Path to mlx-lm executable
+	pythonPath      string                 // Path to Python executable
 }
 
 // NewMLXModel creates a new MLX model for Apple Silicon
 func NewMLXModel(modelID string, options map[string]interface{}) *MLXModel {
 	base := NewBaseModel(modelID, options)
 	base.FlattenMessagesAsText = true // MLX doesn't support vision models
-	
+
 	model := &MLXModel{
 		BaseModel:       base,
 		ModelPath:       modelID, // Default to model ID as path
@@ -48,7 +48,7 @@ func NewMLXModel(modelID string, options map[string]interface{}) *MLXModel {
 		ModelKwargs:     make(map[string]interface{}),
 		TokenizerKwargs: make(map[string]interface{}),
 	}
-	
+
 	if options != nil {
 		if modelPath, ok := options["model_path"].(string); ok {
 			model.ModelPath = modelPath
@@ -78,10 +78,10 @@ func NewMLXModel(modelID string, options map[string]interface{}) *MLXModel {
 			model.TokenizerKwargs = tokenizerKwargs
 		}
 	}
-	
+
 	// Initialize MLX-LM paths
 	model.initializeMLXPaths()
-	
+
 	return model
 }
 
@@ -91,21 +91,21 @@ func (mm *MLXModel) initializeMLXPaths() {
 	if runtime.GOOS != "darwin" || (runtime.GOARCH != "arm64" && runtime.GOARCH != "amd64") {
 		return
 	}
-	
+
 	// Try to find mlx-lm in common locations
 	mlxPaths := []string{
 		"/opt/homebrew/bin/mlx_lm",
 		"/usr/local/bin/mlx_lm",
 		"mlx_lm", // In PATH
 	}
-	
+
 	for _, path := range mlxPaths {
 		if _, err := exec.LookPath(path); err == nil {
 			mm.mlxLMPath = path
 			break
 		}
 	}
-	
+
 	// Try to find Python with mlx-lm installed
 	pythonPaths := []string{
 		"/opt/homebrew/bin/python3",
@@ -114,7 +114,7 @@ func (mm *MLXModel) initializeMLXPaths() {
 		"python3", // In PATH
 		"python",  // Fallback
 	}
-	
+
 	for _, path := range pythonPaths {
 		if _, err := exec.LookPath(path); err == nil {
 			// Test if mlx-lm is available
@@ -133,28 +133,28 @@ func (mm *MLXModel) Generate(messages []interface{}, options *GenerateOptions) (
 	if !mm.isMLXAvailable() {
 		return nil, fmt.Errorf("MLX-LM is not available. Please install it with: pip install mlx-lm")
 	}
-	
+
 	// Check if we're on Apple Silicon
 	if runtime.GOOS != "darwin" {
 		return nil, fmt.Errorf("MLX is only supported on macOS (Apple Silicon)")
 	}
-	
+
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, mm.FlattenMessagesAsText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare the prompt using a simple chat template
 	prompt, err := mm.formatMessagesAsPrompt(cleanMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format messages: %w", err)
 	}
-	
+
 	// Prepare generation parameters
 	maxTokens := mm.MaxTokens
 	temperature := mm.Temperature
-	
+
 	if options != nil {
 		if options.MaxTokens != nil {
 			maxTokens = *options.MaxTokens
@@ -163,26 +163,26 @@ func (mm *MLXModel) Generate(messages []interface{}, options *GenerateOptions) (
 			temperature = *options.Temperature
 		}
 	}
-	
+
 	// Generate response using MLX
 	response, tokenCounts, err := mm.generateWithMLX(prompt, maxTokens, temperature, options)
 	if err != nil {
 		return nil, fmt.Errorf("MLX generation failed: %w", err)
 	}
-	
+
 	// Create ChatMessage
 	message := &ChatMessage{
 		Role:       "assistant",
 		Content:    &response,
 		TokenUsage: monitoring.NewTokenUsage(tokenCounts["input"], tokenCounts["output"]),
-		Raw:        map[string]interface{}{
-			"prompt":       prompt,
-			"model_id":     mm.ModelID,
-			"max_tokens":   maxTokens,
-			"temperature":  temperature,
+		Raw: map[string]interface{}{
+			"prompt":      prompt,
+			"model_id":    mm.ModelID,
+			"max_tokens":  maxTokens,
+			"temperature": temperature,
 		},
 	}
-	
+
 	return message, nil
 }
 
@@ -192,34 +192,34 @@ func (mm *MLXModel) GenerateStream(messages []interface{}, options *GenerateOpti
 	if !mm.isMLXAvailable() {
 		return nil, fmt.Errorf("MLX-LM is not available. Please install it with: pip install mlx-lm")
 	}
-	
+
 	// Check if we're on Apple Silicon
 	if runtime.GOOS != "darwin" {
 		return nil, fmt.Errorf("MLX is only supported on macOS (Apple Silicon)")
 	}
-	
+
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, mm.FlattenMessagesAsText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare the prompt
 	prompt, err := mm.formatMessagesAsPrompt(cleanMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format messages: %w", err)
 	}
-	
+
 	// Create the stream channel
 	streamChan := make(chan *ChatMessageStreamDelta, 100)
-	
+
 	// Start streaming in a goroutine
 	go func() {
 		defer close(streamChan)
-		
+
 		maxTokens := mm.MaxTokens
 		temperature := mm.Temperature
-		
+
 		if options != nil {
 			if options.MaxTokens != nil {
 				maxTokens = *options.MaxTokens
@@ -228,14 +228,14 @@ func (mm *MLXModel) GenerateStream(messages []interface{}, options *GenerateOpti
 				temperature = *options.Temperature
 			}
 		}
-		
+
 		err := mm.generateStreamWithMLX(prompt, maxTokens, temperature, streamChan)
 		if err != nil {
 			// In a real implementation, you'd send an error delta
 			return
 		}
 	}()
-	
+
 	return streamChan, nil
 }
 
@@ -267,11 +267,11 @@ func (mm *MLXModel) isMLXAvailable() bool {
 // formatMessagesAsPrompt converts messages to a prompt string
 func (mm *MLXModel) formatMessagesAsPrompt(messages []map[string]interface{}) (string, error) {
 	var promptParts []string
-	
+
 	for _, msg := range messages {
 		role, _ := msg["role"].(string)
 		content, _ := msg["content"].(string)
-		
+
 		switch role {
 		case "system":
 			promptParts = append(promptParts, fmt.Sprintf("System: %s", content))
@@ -283,10 +283,10 @@ func (mm *MLXModel) formatMessagesAsPrompt(messages []map[string]interface{}) (s
 			promptParts = append(promptParts, fmt.Sprintf("%s: %s", role, content))
 		}
 	}
-	
+
 	// Add final assistant prompt
 	promptParts = append(promptParts, "Assistant:")
-	
+
 	return strings.Join(promptParts, "\n"), nil
 }
 
@@ -294,42 +294,42 @@ func (mm *MLXModel) formatMessagesAsPrompt(messages []map[string]interface{}) (s
 func (mm *MLXModel) generateWithMLX(prompt string, maxTokens int, temperature float64, options *GenerateOptions) (string, map[string]int, error) {
 	// Create a temporary Python script for generation
 	scriptContent := mm.createMLXScript(prompt, maxTokens, temperature, false)
-	
+
 	// Write script to temporary file
 	tmpDir := os.TempDir()
 	scriptPath := filepath.Join(tmpDir, fmt.Sprintf("mlx_generate_%d.py", time.Now().UnixNano()))
-	
+
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return "", nil, fmt.Errorf("failed to write MLX script: %w", err)
 	}
 	defer os.Remove(scriptPath)
-	
+
 	// Execute the script
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, mm.pythonPath, scriptPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", nil, fmt.Errorf("MLX execution failed: %w", err)
 	}
-	
+
 	// Parse the output (assuming JSON format)
 	var result map[string]interface{}
 	if err := json.Unmarshal(output, &result); err != nil {
 		// If JSON parsing fails, return raw output
 		return strings.TrimSpace(string(output)), map[string]int{"input": 100, "output": 50}, nil
 	}
-	
+
 	text, _ := result["text"].(string)
 	inputTokens, _ := result["input_tokens"].(float64)
 	outputTokens, _ := result["output_tokens"].(float64)
-	
+
 	tokenCounts := map[string]int{
 		"input":  int(inputTokens),
 		"output": int(outputTokens),
 	}
-	
+
 	return text, tokenCounts, nil
 }
 
@@ -337,30 +337,30 @@ func (mm *MLXModel) generateWithMLX(prompt string, maxTokens int, temperature fl
 func (mm *MLXModel) generateStreamWithMLX(prompt string, maxTokens int, temperature float64, streamChan chan<- *ChatMessageStreamDelta) error {
 	// Create a temporary Python script for streaming generation
 	scriptContent := mm.createMLXScript(prompt, maxTokens, temperature, true)
-	
+
 	// Write script to temporary file
 	tmpDir := os.TempDir()
 	scriptPath := filepath.Join(tmpDir, fmt.Sprintf("mlx_stream_%d.py", time.Now().UnixNano()))
-	
+
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return fmt.Errorf("failed to write MLX script: %w", err)
 	}
 	defer os.Remove(scriptPath)
-	
+
 	// Execute the script
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, mm.pythonPath, scriptPath)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start MLX process: %w", err)
 	}
-	
+
 	// Read streaming output
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -371,11 +371,11 @@ func (mm *MLXModel) generateStreamWithMLX(prompt string, maxTokens int, temperat
 			}
 		}
 	}
-	
+
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("MLX process failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -406,7 +406,7 @@ except Exception as e:
     sys.exit(1)
 `, mm.ModelPath, mm.TrustRemoteCode, jsonEscape(prompt), maxTokens, temperature)
 	}
-	
+
 	return fmt.Sprintf(`
 import mlx_lm
 import json
@@ -467,18 +467,18 @@ func SupportsMLXModel(modelID string) bool {
 		"mistralai/",
 		"01-ai/",
 	}
-	
+
 	for _, prefix := range supportedPrefixes {
 		if strings.HasPrefix(modelID, prefix) {
 			return true
 		}
 	}
-	
+
 	// Also support local paths
 	if _, err := os.Stat(modelID); err == nil {
 		return true
 	}
-	
+
 	return false
 }
 

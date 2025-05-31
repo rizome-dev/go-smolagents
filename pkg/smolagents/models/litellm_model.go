@@ -16,27 +16,27 @@ import (
 // LiteLLMModel represents a model using LiteLLM proxy
 type LiteLLMModel struct {
 	*BaseModel
-	APIBase                 string            `json:"api_base"`
-	APIKey                  string            `json:"-"` // API key (not serialized)
-	Headers                 map[string]string `json:"headers"`
-	Client                  interface{}       `json:"-"` // HTTP client
-	Timeout                 int               `json:"timeout"` // Request timeout in seconds
-	CustomRoleConversions   map[string]string `json:"custom_role_conversions"`
-	Organization            string            `json:"organization"`
-	Project                 string            `json:"project"`
+	APIBase               string            `json:"api_base"`
+	APIKey                string            `json:"-"` // API key (not serialized)
+	Headers               map[string]string `json:"headers"`
+	Client                interface{}       `json:"-"`       // HTTP client
+	Timeout               int               `json:"timeout"` // Request timeout in seconds
+	CustomRoleConversions map[string]string `json:"custom_role_conversions"`
+	Organization          string            `json:"organization"`
+	Project               string            `json:"project"`
 }
 
 // NewLiteLLMModel creates a new LiteLLM model
 func NewLiteLLMModel(modelID string, options map[string]interface{}) *LiteLLMModel {
 	base := NewBaseModel(modelID, options)
-	
+
 	model := &LiteLLMModel{
 		BaseModel:             base,
 		Headers:               make(map[string]string),
 		Timeout:               30, // Default 30 seconds
 		CustomRoleConversions: make(map[string]string),
 	}
-	
+
 	if options != nil {
 		if apiBase, ok := options["api_base"].(string); ok {
 			model.APIBase = apiBase
@@ -60,12 +60,12 @@ func NewLiteLLMModel(modelID string, options map[string]interface{}) *LiteLLMMod
 			model.Project = project
 		}
 	}
-	
+
 	// Set default base URL if not provided
 	if model.APIBase == "" {
 		model.APIBase = "https://api.openai.com/v1"
 	}
-	
+
 	return model
 }
 
@@ -83,12 +83,12 @@ func (llm *LiteLLMModel) Generate(messages []interface{}, options *GenerateOptio
 			roleConversions[MessageRole(k)] = MessageRole(v)
 		}
 	}
-	
+
 	cleanMessages, err := GetCleanMessageList(messages, roleConversions, true, llm.FlattenMessagesAsText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare completion parameters
 	defaultParams := map[string]interface{}{
 		"model":       llm.ModelID,
@@ -96,9 +96,9 @@ func (llm *LiteLLMModel) Generate(messages []interface{}, options *GenerateOptio
 		"temperature": 0.7,
 		"max_tokens":  2048,
 	}
-	
+
 	priorityParams := map[string]interface{}{}
-	
+
 	// Add tools if provided
 	if options != nil && len(options.ToolsToCallFrom) > 0 {
 		tools := make([]map[string]interface{}, len(options.ToolsToCallFrom))
@@ -108,25 +108,25 @@ func (llm *LiteLLMModel) Generate(messages []interface{}, options *GenerateOptio
 		priorityParams["tools"] = tools
 		priorityParams["tool_choice"] = "auto"
 	}
-	
+
 	// Add response format if provided
 	if options != nil && options.ResponseFormat != nil {
 		priorityParams["response_format"] = options.ResponseFormat
 	}
-	
+
 	// Add stop sequences if supported
 	if options != nil && len(options.StopSequences) > 0 && SupportsStopParameter(llm.ModelID) {
 		priorityParams["stop"] = options.StopSequences
 	}
-	
+
 	kwargs := llm.PrepareCompletionKwargs(options, defaultParams, priorityParams)
-	
+
 	// Make the API call
 	result, err := llm.callAPI(kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("API call failed: %w", err)
 	}
-	
+
 	// Parse the response
 	return llm.parseResponse(result)
 }
@@ -145,12 +145,12 @@ func (llm *LiteLLMModel) GenerateStream(messages []interface{}, options *Generat
 			roleConversions[MessageRole(k)] = MessageRole(v)
 		}
 	}
-	
+
 	cleanMessages, err := GetCleanMessageList(messages, roleConversions, true, llm.FlattenMessagesAsText)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clean messages: %w", err)
 	}
-	
+
 	// Prepare completion parameters
 	defaultParams := map[string]interface{}{
 		"model":       llm.ModelID,
@@ -159,16 +159,16 @@ func (llm *LiteLLMModel) GenerateStream(messages []interface{}, options *Generat
 		"max_tokens":  2048,
 		"stream":      true,
 	}
-	
+
 	kwargs := llm.PrepareCompletionKwargs(options, defaultParams, map[string]interface{}{})
-	
+
 	// Create the stream channel
 	streamChan := make(chan *ChatMessageStreamDelta, 100)
-	
+
 	// Start streaming in a goroutine
 	go func() {
 		defer close(streamChan)
-		
+
 		// Make streaming API call
 		err := llm.callStreamingAPI(kwargs, streamChan)
 		if err != nil {
@@ -176,7 +176,7 @@ func (llm *LiteLLMModel) GenerateStream(messages []interface{}, options *Generat
 			return
 		}
 	}()
-	
+
 	return streamChan, nil
 }
 
@@ -204,14 +204,14 @@ func (llm *LiteLLMModel) callAPI(kwargs map[string]interface{}) (map[string]inte
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(llm.APIBase, "/"))
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	if llm.APIKey != "" {
@@ -226,36 +226,36 @@ func (llm *LiteLLMModel) callAPI(kwargs map[string]interface{}) (map[string]inte
 	for key, value := range llm.Headers {
 		req.Header.Set(key, value)
 	}
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: time.Duration(llm.Timeout) * time.Second,
 	}
-	
+
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse JSON response
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	return result, nil
 }
 
@@ -267,14 +267,14 @@ func (llm *LiteLLMModel) callStreamingAPI(kwargs map[string]interface{}, streamC
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create HTTP request
 	url := fmt.Sprintf("%s/chat/completions", strings.TrimSuffix(llm.APIBase, "/"))
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Set headers for streaming
 	req.Header.Set("Content-Type", "application/json")
 	if llm.APIKey != "" {
@@ -291,25 +291,25 @@ func (llm *LiteLLMModel) callStreamingAPI(kwargs map[string]interface{}, streamC
 	for key, value := range llm.Headers {
 		req.Header.Set(key, value)
 	}
-	
+
 	// Create HTTP client with longer timeout for streaming
 	client := &http.Client{
 		Timeout: time.Duration(llm.Timeout*10) * time.Second, // 10x timeout for streaming
 	}
-	
+
 	// Make the request
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Process Server-Sent Events
 	return llm.processSSEStream(resp.Body, streamChan)
 }
@@ -318,20 +318,20 @@ func (llm *LiteLLMModel) callStreamingAPI(kwargs map[string]interface{}, streamC
 func (llm *LiteLLMModel) processSSEStream(body io.ReadCloser, streamChan chan<- *ChatMessageStreamDelta) error {
 	buffer := make([]byte, 4096)
 	var accumulated strings.Builder
-	
+
 	for {
 		n, err := body.Read(buffer)
 		if err != nil && err != io.EOF {
 			return fmt.Errorf("error reading stream: %w", err)
 		}
-		
+
 		if n == 0 {
 			break
 		}
-		
+
 		accumulated.Write(buffer[:n])
 		data := accumulated.String()
-		
+
 		// Process complete SSE events
 		lines := strings.Split(data, "\n")
 		for i, line := range lines {
@@ -340,14 +340,14 @@ func (llm *LiteLLMModel) processSSEStream(body io.ReadCloser, streamChan chan<- 
 				if jsonData == "[DONE]" {
 					return nil
 				}
-				
+
 				var delta map[string]interface{}
 				if err := json.Unmarshal([]byte(jsonData), &delta); err == nil {
 					if streamDelta := llm.parseStreamDelta(delta); streamDelta != nil {
 						streamChan <- streamDelta
 					}
 				}
-				
+
 				// Remove processed lines from buffer
 				accumulated.Reset()
 				accumulated.WriteString(strings.Join(lines[i+1:], "\n"))
@@ -355,7 +355,7 @@ func (llm *LiteLLMModel) processSSEStream(body io.ReadCloser, streamChan chan<- 
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -381,23 +381,23 @@ func (llm *LiteLLMModel) parseResponse(response map[string]interface{}) (*ChatMe
 	if !ok || len(choices) == 0 {
 		return nil, fmt.Errorf("invalid response format: no choices found")
 	}
-	
+
 	choice, ok := choices[0].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid response format: invalid choice")
 	}
-	
+
 	messageData, ok := choice["message"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid response format: no message found")
 	}
-	
+
 	message := &ChatMessage{}
 	err := message.FromDict(messageData, response, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse message: %w", err)
 	}
-	
+
 	// Parse token usage if available
 	if usage, ok := response["usage"].(map[string]interface{}); ok {
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
@@ -406,9 +406,9 @@ func (llm *LiteLLMModel) parseResponse(response map[string]interface{}) (*ChatMe
 			}
 		}
 	}
-	
+
 	// Store raw response
 	message.Raw = response
-	
+
 	return message, nil
 }

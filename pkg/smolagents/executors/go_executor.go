@@ -31,20 +31,20 @@ type GoExecutor struct {
 	availableTools     map[string]tools.Tool
 	authorizedPackages []string
 	workingDir         string
-	
+
 	// Configuration
-	timeout           time.Duration
-	maxMemory         int64
-	maxOutputLength   int
-	enableNetworking  bool
-	enableFileSystem  bool
-	
+	timeout          time.Duration
+	maxMemory        int64
+	maxOutputLength  int
+	enableNetworking bool
+	enableFileSystem bool
+
 	// Execution state
-	executionCount    int
-	mu                sync.RWMutex
-	
+	executionCount int
+	mu             sync.RWMutex
+
 	// Code template for execution
-	codeTemplate      string
+	codeTemplate string
 }
 
 // NewGoExecutor creates a new Go code executor
@@ -53,22 +53,22 @@ func NewGoExecutor(options ...map[string]interface{}) (*GoExecutor, error) {
 		variables:          make(map[string]interface{}),
 		availableTools:     make(map[string]tools.Tool),
 		authorizedPackages: DefaultAuthorizedPackages(),
-		timeout:           30 * time.Second,
-		maxMemory:         100 * 1024 * 1024, // 100MB
-		maxOutputLength:   10000,
-		enableNetworking:  false,
-		enableFileSystem:  false,
-		executionCount:    0,
-		codeTemplate:      defaultGoTemplate,
+		timeout:            30 * time.Second,
+		maxMemory:          100 * 1024 * 1024, // 100MB
+		maxOutputLength:    10000,
+		enableNetworking:   false,
+		enableFileSystem:   false,
+		executionCount:     0,
+		codeTemplate:       defaultGoTemplate,
 	}
-	
+
 	// Create working directory
 	workDir, err := os.MkdirTemp("", "smolagents-go-executor-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create working directory: %w", err)
 	}
 	executor.workingDir = workDir
-	
+
 	// Apply options
 	if len(options) > 0 {
 		opts := options[0]
@@ -91,7 +91,7 @@ func NewGoExecutor(options ...map[string]interface{}) (*GoExecutor, error) {
 			executor.authorizedPackages = packages
 		}
 	}
-	
+
 	return executor, nil
 }
 
@@ -112,32 +112,32 @@ func DefaultAuthorizedPackages() []string {
 func (ge *GoExecutor) Execute(code string, authorizedImports []string) (interface{}, error) {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
-	
+
 	ge.executionCount++
-	
+
 	// Validate the code
 	if err := ge.validateCode(code, authorizedImports); err != nil {
 		return nil, fmt.Errorf("code validation failed: %w", err)
 	}
-	
+
 	// Prepare the complete Go program
 	program, err := ge.buildProgram(code, authorizedImports)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build program: %w", err)
 	}
-	
+
 	// Execute the program
 	result, err := ge.executeProgram(program)
 	if err != nil {
 		return nil, fmt.Errorf("execution failed: %w", err)
 	}
-	
+
 	// Parse and store any variable updates
 	if err := ge.updateVariables(result); err != nil {
 		// Don't fail on variable update errors, just log them
 		fmt.Printf("Warning: failed to update variables: %v\n", err)
 	}
-	
+
 	return result.Output, nil
 }
 
@@ -164,17 +164,17 @@ func main() {
 	if err != nil {
 		return fmt.Errorf("syntax error: %w", err)
 	}
-	
+
 	// Check for unauthorized imports
 	if err := ge.checkImports(code, authorizedImports); err != nil {
 		return fmt.Errorf("unauthorized import: %w", err)
 	}
-	
+
 	// Check for unsafe operations
 	if err := ge.checkUnsafeOperations(code); err != nil {
 		return fmt.Errorf("unsafe operation detected: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -188,11 +188,11 @@ func (ge *GoExecutor) checkImports(code string, authorizedImports []string) erro
 	for _, pkg := range authorizedImports {
 		allowed[pkg] = true
 	}
-	
+
 	// Parse imports from code
 	importRegex := regexp.MustCompile(`import\s+(?:\(\s*([^)]+)\s*\)|"([^"]+)"|([^\s]+))`)
 	matches := importRegex.FindAllStringSubmatch(code, -1)
-	
+
 	for _, match := range matches {
 		var importPath string
 		if match[1] != "" {
@@ -214,12 +214,12 @@ func (ge *GoExecutor) checkImports(code string, authorizedImports []string) erro
 			// Single import without quotes
 			importPath = match[3]
 		}
-		
+
 		if importPath != "" && !allowed[importPath] {
 			return fmt.Errorf("unauthorized import: %s", importPath)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -232,7 +232,7 @@ func (ge *GoExecutor) checkUnsafeOperations(code string) error {
 		`panic\s*\(`,   // panic calls
 		`recover\s*\(`, // recover calls
 	}
-	
+
 	if !ge.enableFileSystem {
 		unsafePatterns = append(unsafePatterns,
 			`os\.Create`, `os\.Open`, `os\.Remove`, `os\.Mkdir`,
@@ -240,20 +240,20 @@ func (ge *GoExecutor) checkUnsafeOperations(code string) error {
 			`filepath\.Walk`,
 		)
 	}
-	
+
 	if !ge.enableNetworking {
 		unsafePatterns = append(unsafePatterns,
 			`http\.`, `net\.`, `url\.`,
 		)
 	}
-	
+
 	for _, pattern := range unsafePatterns {
 		matched, _ := regexp.MatchString(pattern, code)
 		if matched {
 			return fmt.Errorf("unsafe operation detected: %s", pattern)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -263,13 +263,13 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 	defaultImports := []string{"encoding/json", "fmt", "os"}
 	importSet := make(map[string]bool)
 	var imports []string
-	
+
 	// Add default imports first
 	for _, pkg := range defaultImports {
 		importSet[pkg] = true
 		imports = append(imports, fmt.Sprintf(`"%s"`, pkg))
 	}
-	
+
 	// Add authorized packages (avoiding duplicates)
 	for _, pkg := range authorizedPackages {
 		if !importSet[pkg] {
@@ -277,16 +277,16 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 			imports = append(imports, fmt.Sprintf(`"%s"`, pkg))
 		}
 	}
-	
+
 	// Prepare variables as global variables
 	var variableDeclarations []string
 	for name, value := range ge.variables {
 		varType := reflect.TypeOf(value).String()
 		varValue := ge.formatValue(value)
-		variableDeclarations = append(variableDeclarations, 
+		variableDeclarations = append(variableDeclarations,
 			fmt.Sprintf("var %s %s = %s", name, varType, varValue))
 	}
-	
+
 	// Build the complete program
 	program := fmt.Sprintf(`package main
 
@@ -330,13 +330,13 @@ func main() {
 	}
 	
 	fmt.Print(string(jsonOutput))
-}`, 
+}`,
 		strings.Join(imports, "\n\t"),
 		strings.Join(variableDeclarations, "\n"),
 		code,
 		ge.buildVariableCapture(),
 	)
-	
+
 	return program, nil
 }
 
@@ -373,19 +373,19 @@ func (ge *GoExecutor) executeProgram(program string) (*ExecutionResult, error) {
 	// Write program to file
 	filename := fmt.Sprintf("program_%d.go", ge.executionCount)
 	filePath := filepath.Join(ge.workingDir, filename)
-	
+
 	if err := os.WriteFile(filePath, []byte(program), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write program file: %w", err)
 	}
-	
+
 	// Set up execution context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), ge.timeout)
 	defer cancel()
-	
+
 	// Prepare command
 	cmd := exec.CommandContext(ctx, "go", "run", filePath)
 	cmd.Dir = ge.workingDir
-	
+
 	// Set up environment restrictions
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
@@ -393,23 +393,23 @@ func (ge *GoExecutor) executeProgram(program string) (*ExecutionResult, error) {
 		"GOCACHE=" + filepath.Join(ge.workingDir, ".cache"),
 		fmt.Sprintf("GOMAXPROCS=%d", 1), // Limit CPU usage
 	}
-	
+
 	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Execute
 	startTime := time.Now()
 	err := cmd.Run()
 	duration := time.Since(startTime)
-	
+
 	result := &ExecutionResult{
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),
 		Duration: duration,
 	}
-	
+
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return result, fmt.Errorf("execution timeout after %v", ge.timeout)
@@ -421,7 +421,7 @@ func (ge *GoExecutor) executeProgram(program string) (*ExecutionResult, error) {
 		}
 		return result, fmt.Errorf("%s", errorMsg)
 	}
-	
+
 	// Parse output
 	if stdout.Len() > 0 {
 		var output map[string]interface{}
@@ -435,7 +435,7 @@ func (ge *GoExecutor) executeProgram(program string) (*ExecutionResult, error) {
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -444,11 +444,11 @@ func (ge *GoExecutor) updateVariables(result *ExecutionResult) error {
 	if result.Variables == nil {
 		return nil
 	}
-	
+
 	for name, value := range result.Variables {
 		ge.variables[name] = value
 	}
-	
+
 	return nil
 }
 
@@ -456,11 +456,11 @@ func (ge *GoExecutor) updateVariables(result *ExecutionResult) error {
 func (ge *GoExecutor) SendVariables(variables map[string]interface{}) error {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
-	
+
 	for name, value := range variables {
 		ge.variables[name] = value
 	}
-	
+
 	return nil
 }
 
@@ -468,11 +468,11 @@ func (ge *GoExecutor) SendVariables(variables map[string]interface{}) error {
 func (ge *GoExecutor) SendTools(tools map[string]tools.Tool) error {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
-	
+
 	for name, tool := range tools {
 		ge.availableTools[name] = tool
 	}
-	
+
 	return nil
 }
 
@@ -480,12 +480,12 @@ func (ge *GoExecutor) SendTools(tools map[string]tools.Tool) error {
 func (ge *GoExecutor) GetState() map[string]interface{} {
 	ge.mu.RLock()
 	defer ge.mu.RUnlock()
-	
+
 	state := make(map[string]interface{})
 	for name, value := range ge.variables {
 		state[name] = value
 	}
-	
+
 	return state
 }
 
@@ -493,22 +493,22 @@ func (ge *GoExecutor) GetState() map[string]interface{} {
 func (ge *GoExecutor) Reset() error {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
-	
+
 	ge.variables = make(map[string]interface{})
 	ge.executionCount = 0
-	
+
 	// Clean up working directory
 	if err := os.RemoveAll(ge.workingDir); err != nil {
 		return fmt.Errorf("failed to clean working directory: %w", err)
 	}
-	
+
 	// Create new working directory
 	workDir, err := os.MkdirTemp("", "smolagents-go-executor-*")
 	if err != nil {
 		return fmt.Errorf("failed to create new working directory: %w", err)
 	}
 	ge.workingDir = workDir
-	
+
 	return nil
 }
 
@@ -537,7 +537,7 @@ func (ge *GoExecutor) SetAuthorizedPackages(packages []string) {
 func (ge *GoExecutor) Close() error {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
-	
+
 	return os.RemoveAll(ge.workingDir)
 }
 
