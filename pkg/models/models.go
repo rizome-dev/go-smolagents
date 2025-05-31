@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/tools"
+	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
+	"github.com/rizome-dev/smolagentsgo/pkg/tools"
 )
 
 // MessageRole represents the role of a message in conversation

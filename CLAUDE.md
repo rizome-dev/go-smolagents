@@ -41,12 +41,16 @@ cd internal/examples/research_agent && go run main.go  # Advanced agentic resear
 This is a Go port of the Python smolagents library that provides a framework for building AI agents. The codebase follows a modular architecture:
 
 **Core Package Structure:**
-- `smolagentsgo.go` - Main package exports and re-exports from sub-packages
-- `agents/` - Agent implementations (MultiStepAgent, ToolCallingAgent, CodeAgent, ManagedAgent)
-- `models/` - LLM integration layer with HuggingFace support
-- `tools/` - Tool interface and implementations (web search, calculator, etc.)
-- `memory/` - Agent memory management (conversation history, steps)
-- `utils/` - Shared utilities and error types
+- `pkg/smolagents.go` - Main package exports and re-exports from sub-packages
+- `pkg/agents/` - Agent implementations (MultiStepAgent, ToolCallingAgent, CodeAgent, ManagedAgent)
+- `pkg/models/` - LLM integration layer with HuggingFace support
+- `pkg/tools/` - Tool interface and implementations (web search, calculator, etc.)
+- `pkg/memory/` - Agent memory management (conversation history, steps)
+- `pkg/utils/` - Shared utilities and error types
+- `pkg/default_tools/` - Built-in tool implementations
+- `pkg/executors/` - Code execution engines
+- `pkg/monitoring/` - Performance monitoring and logging
+- `pkg/agent_types/` - Core agent type definitions
 
 **Key Agent Types:**
 - `BaseMultiStepAgent` - Foundation for step-by-step execution agents
@@ -71,12 +75,12 @@ This is a Go port of the Python smolagents library that provides a framework for
 
 ## Key Files to Understand
 
-- `smolagentsgo.go` - Package entry point with all exports
-- `agents/multi_step_agent.go` - Core agent execution logic  
-- `agents/tool_calling_agent.go` - Tool integration patterns
-- `models/inference_client.go` - LLM API client implementation
-- `tools/tools.go` - Tool interface definition
-- `memory/memory.go` - Memory abstraction interfaces
+- `pkg/smolagents.go` - Package entry point with all exports
+- `pkg/agents/agents.go` - Core agent execution logic  
+- `pkg/agents/tool_calling_agent.go` - Tool integration patterns
+- `pkg/models/inference_client.go` - LLM API client implementation
+- `pkg/tools/tools.go` - Tool interface definition
+- `pkg/memory/memory.go` - Memory abstraction interfaces
 - `AGENTIC_WORKFLOW_BEST_PRACTICES.md` - Comprehensive guide to advanced agentic design patterns
 
 ## Testing Patterns

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
+	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
 )
 
 // VLLMModel represents a model using vLLM for fast inference

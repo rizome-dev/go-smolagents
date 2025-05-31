@@ -3,8 +3,8 @@ package agents
 import (
 	"testing"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/tools"
+	"github.com/rizome-dev/smolagentsgo/pkg/models"
+	"github.com/rizome-dev/smolagentsgo/pkg/tools"
 )
 
 // MockModel for testing

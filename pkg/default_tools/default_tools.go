@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/executors"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/utils"
+	"github.com/rizome-dev/smolagentsgo/pkg/executors"
+	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/smolagentsgo/pkg/utils"
 )
 
 // BaseBuiltinPackages lists Go packages allowed in GoInterpreterTool

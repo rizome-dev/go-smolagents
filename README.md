@@ -112,9 +112,9 @@ smolagentsgo/
 package main
 
 import (
-    "github.com/rizome-dev/smolagentsgo/pkg/smolagents/agents"
-    "github.com/rizome-dev/smolagentsgo/pkg/smolagents/models"
-    "github.com/rizome-dev/smolagentsgo/pkg/smolagents/default_tools"
+    "github.com/rizome-dev/smolagentsgo/pkg/agents"
+    "github.com/rizome-dev/smolagentsgo/pkg/models"
+    "github.com/rizome-dev/smolagentsgo/pkg/default_tools"
 )
 
 func main() {

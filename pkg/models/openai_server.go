@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
+	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
 )
 
 // OpenAIServerModel represents a model using OpenAI-compatible API servers

@@ -8,12 +8,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/default_tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/memory"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/monitoring"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/utils"
+	"github.com/rizome-dev/smolagentsgo/pkg/default_tools"
+	"github.com/rizome-dev/smolagentsgo/pkg/memory"
+	"github.com/rizome-dev/smolagentsgo/pkg/models"
+	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
+	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/smolagentsgo/pkg/utils"
 )
 
 // Default system prompt for ToolCallingAgent

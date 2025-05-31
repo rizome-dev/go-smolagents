@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/smolagents/agent_types"
+	"github.com/rizome-dev/smolagentsgo/pkg/agent_types"
 )
 
 // MockTool for testing
