@@ -31,8 +31,10 @@ go list -u -m all
 go get -u ./...
 
 # Run examples
-cd examples/calculator && go run main.go  # Requires HF_API_TOKEN env var
-cd examples/web_search && go run main.go  # Requires HF_API_TOKEN env var
+cd internal/examples/calculator && go run main.go  # Requires HF_API_TOKEN env var
+cd internal/examples/websearch && go run main.go  # Requires HF_API_TOKEN env var
+cd internal/examples/research_agent && go run main.go  # Basic research agent
+cd internal/examples/enhanced_research_agent && go run main.go  # Advanced agentic research system
 ```
 
 ## Architecture Overview
@@ -73,9 +75,10 @@ This is a Go port of the Python smolagents library that provides a framework for
 - `smolagentsgo.go` - Package entry point with all exports
 - `agents/multi_step_agent.go` - Core agent execution logic  
 - `agents/tool_calling_agent.go` - Tool integration patterns
-- `models/huggingface_model.go` - LLM API client implementation
+- `models/inference_client.go` - LLM API client implementation
 - `tools/tools.go` - Tool interface definition
 - `memory/memory.go` - Memory abstraction interfaces
+- `AGENTIC_WORKFLOW_BEST_PRACTICES.md` - Comprehensive guide to advanced agentic design patterns
 
 ## Testing Patterns
 
