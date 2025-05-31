@@ -40,7 +40,7 @@ func main() {
 		"api_base": "https://api-inference.huggingface.co/models",
 	})
 
-	fmt.Println("=== Structured Generation Examples ===\n")
+	fmt.Println("=== Structured Generation Examples ===")
 
 	// Example 1: JSON Object Response
 	fmt.Println("1. JSON Object Generation:")
