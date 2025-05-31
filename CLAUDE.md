@@ -17,11 +17,18 @@ go test -v ./...
 # Run tests for specific package
 go test ./memory
 
-# Run linting (if available)
+# Run linting and code quality checks
 go vet ./...
 
 # Format code
 go fmt ./...
+
+# Check for security vulnerabilities
+go list -json -deps ./... | nancy sleuth
+
+# Update dependencies (check for newer versions)
+go list -u -m all
+go get -u ./...
 
 # Run examples
 cd examples/calculator && go run main.go  # Requires HF_API_TOKEN env var
@@ -73,6 +80,59 @@ This is a Go port of the Python smolagents library that provides a framework for
 ## Testing Patterns
 
 Tests use standard Go testing framework. Current test coverage is minimal with only memory package having tests. When adding tests, follow the pattern in `memory/simple_memory_test.go`.
+
+## Code Quality and Security Monitoring
+
+**IMPORTANT: Claude should proactively monitor and fix the following on every session:**
+
+### Go Report Card
+- Check https://goreportcard.com/report/github.com/rizome-dev/smolagentsgo for code quality issues
+- Address any reported issues: gofmt, go vet, gocyclo, ineffassign, misspell, golint
+- Run `go fmt ./...` and `go vet ./...` regularly to maintain code quality
+- Target 100% Go Report Card score
+
+### Dependabot Security Updates
+- Monitor GitHub Dependabot alerts for security vulnerabilities
+- Update vulnerable dependencies promptly using `go get -u [dependency]`
+- Run `go mod tidy` after dependency updates
+- Test all functionality after security updates
+
+### Dependencies to Monitor
+- `golang.org/x/net` - Network libraries (security-critical)
+- `golang.org/x/sys` - System interfaces (security-critical) 
+- `golang.org/x/text` - Text processing (security-critical)
+- `golang.org/x/crypto` - Cryptographic libraries (security-critical)
+- Third-party dependencies with known CVEs
+
+### Automation Checklist
+When working on this codebase, Claude should:
+1. Check Go Report Card status first
+2. Review any open Dependabot alerts
+3. Run `go vet ./...` and `go fmt ./...` before commits
+4. Update dependencies if security alerts exist
+5. Run full test suite after any dependency updates
+6. Maintain backwards compatibility unless explicitly requested otherwise
+
+## Development Best Practices
+
+### Code Style
+- Follow standard Go formatting (`go fmt`)
+- Use meaningful variable and function names
+- Add comments for exported functions and complex logic
+- Keep functions focused and under 50 lines when possible
+- Avoid cyclomatic complexity > 10
+
+### Security
+- Never commit API keys or secrets
+- Validate all external inputs
+- Use secure defaults for all configurations
+- Follow principle of least privilege
+
+### Performance
+- Use context.Context for cancellation
+- Implement proper error handling and timeouts
+- Avoid memory leaks in long-running agents
+- Use goroutines judiciously for concurrent operations
 
 ## Notes
 

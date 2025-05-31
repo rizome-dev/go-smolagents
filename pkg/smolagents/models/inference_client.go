@@ -263,7 +263,7 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", icm.Token))
 	req.Header.Set("User-Agent", "smolagents-go/1.0")
-	
+
 	// Add optional headers
 	for key, value := range icm.Headers {
 		req.Header.Set(key, value)

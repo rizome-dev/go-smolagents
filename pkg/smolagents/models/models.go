@@ -349,7 +349,7 @@ func (bm *BaseModel) ParseToolCalls(message *ChatMessage) (*ChatMessage, error) 
 	for _, p := range patterns {
 		namePattern := regexp.MustCompile(p.namePattern)
 		nameMatches := namePattern.FindStringSubmatch(content)
-		
+
 		if len(nameMatches) > 1 {
 			toolName := strings.TrimSpace(nameMatches[1])
 			var arguments interface{}

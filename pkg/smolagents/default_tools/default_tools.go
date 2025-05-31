@@ -398,17 +398,17 @@ func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
 
 	// Parse HTML results (simplified extraction)
 	htmlContent := string(body)
-	
+
 	// Extract search results using regex (basic approach)
 	results := wst.extractSearchResults(htmlContent, query)
-	
+
 	if len(results) == 0 {
 		return fmt.Sprintf("Search results for '%s':\n\nNo results found or search blocked. Consider using different search terms.", query), nil
 	}
 
 	var output strings.Builder
 	output.WriteString(fmt.Sprintf("Search results for '%s':\n\n", query))
-	
+
 	for i, result := range results {
 		if i >= wst.MaxResults {
 			break
@@ -422,12 +422,12 @@ func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
 // extractSearchResults extracts search results from DuckDuckGo HTML
 func (wst *WebSearchTool) extractSearchResults(htmlContent, query string) []string {
 	var results []string
-	
+
 	// Look for result links and titles
 	// DuckDuckGo HTML structure: <a class="result__a" href="...">title</a>
 	linkPattern := regexp.MustCompile(`<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>`)
 	matches := linkPattern.FindAllStringSubmatch(htmlContent, wst.MaxResults)
-	
+
 	for _, match := range matches {
 		if len(match) >= 3 {
 			url := strings.TrimSpace(match[1])
@@ -440,13 +440,13 @@ func (wst *WebSearchTool) extractSearchResults(htmlContent, query string) []stri
 			}
 		}
 	}
-	
+
 	// If no results found with that pattern, try a more generic approach
 	if len(results) == 0 {
 		// Return a placeholder indicating search was attempted
 		return []string{fmt.Sprintf("Search attempted for '%s' but no results could be extracted. This may be due to rate limiting or changes in the search provider's HTML structure.", query)}
 	}
-	
+
 	return results
 }
 
