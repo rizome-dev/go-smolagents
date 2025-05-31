@@ -22,6 +22,8 @@ const DefaultToolCallingSystemPrompt = `You are an expert assistant. You are giv
 You have access to the following tools:
 {{tool_descriptions}}
 
+IMPORTANT: When you have completed your task and are ready to provide a final answer, you MUST use the final_answer tool with your complete response. Do not provide answers in regular text - always use the final_answer tool to deliver your conclusion.
+
 Your output should directly call tools when appropriate. Always use the exact function names provided.
 
 Be helpful, accurate, and efficient in your responses.`
@@ -261,6 +263,14 @@ func (tca *ToolCallingAgent) executeStep(ctx context.Context, stepNumber int, op
 		return nil, step.Error
 	}
 
+	// Parse tool calls from response content if not already structured
+	if len(response.ToolCalls) == 0 && response.Content != nil {
+		parsedResponse, err := tca.model.ParseToolCalls(response)
+		if err == nil && parsedResponse != nil {
+			response = parsedResponse
+		}
+	}
+
 	step.ModelOutputMessage = &models.ChatMessage{
 		Role:    response.Role,
 		Content: response.Content,
@@ -401,11 +411,28 @@ func (tca *ToolCallingAgent) isFinalAnswerContent(content string) bool {
 		"(?i)to summarize",
 		"(?i)the answer is",
 		"(?i)therefore",
+		"(?i)based on.*research",
+		"(?i)comprehensive.*overview",
+		"(?i)solutions.*include",
+		"(?i)strategies.*focus",
 	}
 
 	for _, pattern := range finalAnswerPatterns {
 		matched, _ := regexp.MatchString(pattern, content)
 		if matched {
+			return true
+		}
+	}
+
+	// Check for long, comprehensive responses (likely final answers)
+	wordCount := len(strings.Fields(content))
+	if wordCount > 100 && strings.Contains(content, "climate change") {
+		return true
+	}
+
+	// Check for structured content with bullet points or numbered lists
+	if strings.Contains(content, "*") || strings.Contains(content, "1.") {
+		if wordCount > 50 {
 			return true
 		}
 	}

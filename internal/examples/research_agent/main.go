@@ -81,7 +81,18 @@ func NewResearchManager(model models.Model, numWorkers int) (*ResearchManager, e
 		default_tools.NewUserInputTool(),
 	}
 	
-	managerAgent, err := agents.NewToolCallingAgent(model, managerTools, "manager", map[string]interface{}{
+	managerPrompt := `You are a research coordination agent. Your job is to plan and coordinate research tasks.
+
+You have access to the following tools:
+{{tool_descriptions}}
+
+IMPORTANT: When you have completed your task and are ready to provide a final answer, you MUST use the final_answer tool with your complete response. Do not provide answers in regular text - always use the final_answer tool to deliver your conclusion.
+
+Your output should directly call tools when appropriate. Always use the exact function names provided.
+
+Be helpful, accurate, and efficient in your responses.`
+
+	managerAgent, err := agents.NewToolCallingAgent(model, managerTools, managerPrompt, map[string]interface{}{
 		"max_steps": 20,
 		"temperature": 0.1, // More focused for coordination
 	})
@@ -133,7 +144,18 @@ func NewResearchWorker(id string, model models.Model, manager *ResearchManager) 
 		default_tools.NewFinalAnswerTool(),
 	}
 	
-	workerAgent, err := agents.NewToolCallingAgent(model, workerTools, "worker", map[string]interface{}{
+	workerPrompt := `You are a research agent specializing in gathering information on specific topics. Conduct thorough research using the available tools.
+
+You have access to the following tools:
+{{tool_descriptions}}
+
+IMPORTANT: When you have completed your research and are ready to provide a final answer, you MUST use the final_answer tool with your complete response. Do not provide answers in regular text - always use the final_answer tool to deliver your conclusion.
+
+Your output should directly call tools when appropriate. Always use the exact function names provided.
+
+Be thorough, accurate, and provide comprehensive responses based on your research.`
+
+	workerAgent, err := agents.NewToolCallingAgent(model, workerTools, workerPrompt, map[string]interface{}{
 		"max_steps": 15,
 		"temperature": 0.3, // More creative for research
 	})

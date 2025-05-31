@@ -175,8 +175,12 @@ func (icm *InferenceClientModel) supportsStructuredGeneration() bool {
 
 // callAPI makes the actual API call to HuggingFace Inference API
 func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[string]interface{}, error) {
-	// For HuggingFace Inference API, we need to format the request properly
-	// Check if this looks like a chat model (we'll use conversational format)
+	// Check if we're using the new chat completions endpoint
+	if strings.Contains(icm.BaseURL, "chat/completions") || strings.Contains(icm.BaseURL, "v1/") {
+		return icm.callOpenAICompatibleAPI(kwargs)
+	}
+
+	// For standard HuggingFace Inference API, we need to format the request properly
 	messages, ok := kwargs["messages"].([]map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid messages format: %T", kwargs["messages"])
@@ -185,8 +189,14 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 	// Convert messages to a single input string for HF Inference API
 	var inputText strings.Builder
 	for _, msg := range messages {
-		role := msg["role"].(string)
-		content := msg["content"].(string)
+		role, ok := msg["role"].(string)
+		if !ok {
+			continue
+		}
+		content, ok := msg["content"].(string)
+		if !ok {
+			continue
+		}
 
 		switch role {
 		case "system":
@@ -199,20 +209,41 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 	}
 	inputText.WriteString("Assistant:")
 
-	// Prepare the request body for HuggingFace Inference API
-	requestBody := map[string]interface{}{
-		"inputs": inputText.String(),
-		"parameters": map[string]interface{}{
-			"max_new_tokens":   kwargs["max_tokens"],
-			"temperature":      kwargs["temperature"],
-			"return_full_text": false,
-			"do_sample":        true,
-		},
+	// Prepare parameters with correct HF parameter names
+	parameters := map[string]interface{}{
+		"return_full_text": false,
+		"do_sample":        true,
 	}
 
-	// Add tools if provided
-	if tools, ok := kwargs["tools"]; ok {
-		requestBody["tools"] = tools
+	// Map standard parameters to HF parameter names
+	if maxTokens, ok := kwargs["max_tokens"]; ok {
+		parameters["max_new_tokens"] = maxTokens
+	} else {
+		parameters["max_new_tokens"] = 2048 // Default
+	}
+
+	if temperature, ok := kwargs["temperature"]; ok {
+		parameters["temperature"] = temperature
+	} else {
+		parameters["temperature"] = 0.7 // Default
+	}
+
+	if topP, ok := kwargs["top_p"]; ok {
+		parameters["top_p"] = topP
+	}
+
+	if topK, ok := kwargs["top_k"]; ok {
+		parameters["top_k"] = topK
+	}
+
+	if seed, ok := kwargs["seed"]; ok {
+		parameters["seed"] = seed
+	}
+
+	// Prepare the request body for HuggingFace Inference API
+	requestBody := map[string]interface{}{
+		"inputs":     inputText.String(),
+		"parameters": parameters,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -220,31 +251,27 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	// HuggingFace Inference API endpoint format
+	// Create HTTP request - HuggingFace Inference API endpoint format
 	url := fmt.Sprintf("%s/models/%s", icm.BaseURL, icm.ModelID)
-
-	if strings.Contains(icm.BaseURL, "chat/completions") {
-		url = icm.BaseURL
-		requestBody = kwargs // Use OpenAI-compatible format
-		jsonData, _ = json.Marshal(requestBody)
-	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
+	// Set headers required by HF Inference API
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", icm.Token))
+	req.Header.Set("User-Agent", "smolagents-go/1.0")
+	
+	// Add optional headers
 	for key, value := range icm.Headers {
 		req.Header.Set(key, value)
 	}
 
 	// Create HTTP client with timeout
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 60 * time.Second, // Longer timeout for HF API
 	}
 
 	// Make the request
@@ -260,8 +287,14 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Check for HTTP errors
+	// Check for HTTP errors with more detailed error messages
 	if resp.StatusCode >= 400 {
+		var errorDetails map[string]interface{}
+		if json.Unmarshal(body, &errorDetails) == nil {
+			if errorMsg, ok := errorDetails["error"].(string); ok {
+				return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorMsg)
+			}
+		}
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -271,18 +304,49 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	// Convert HuggingFace format to OpenAI-compatible format if needed
+	// Convert HuggingFace format to OpenAI-compatible format
+	result := icm.convertHFToOpenAIFormat(rawResult)
+	return result, nil
+}
+
+// callOpenAICompatibleAPI handles OpenAI-compatible endpoints (like new HF inference providers)
+func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]interface{}) (map[string]interface{}, error) {
+	jsonData, err := json.Marshal(kwargs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", icm.BaseURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", icm.Token))
+	for key, value := range icm.Headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
 	var result map[string]interface{}
-	if !strings.Contains(icm.BaseURL, "chat/completions") {
-		result = icm.convertHFToOpenAIFormat(rawResult)
-	} else {
-		// Already in OpenAI format
-		if resultMap, ok := rawResult.(map[string]interface{}); ok {
-			result = resultMap
-		} else {
-			// Unexpected format
-			return nil, fmt.Errorf("unexpected response format: %T", rawResult)
-		}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return result, nil
@@ -376,93 +440,81 @@ func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) 
 func (icm *InferenceClientModel) convertHFToOpenAIFormat(hfResponse interface{}) map[string]interface{} {
 	// HuggingFace responses vary by model, this handles common formats
 
-	// Check if it's a map (object response)
+	// Check if it's already in OpenAI format
 	if responseMap, ok := hfResponse.(map[string]interface{}); ok {
-		// Check if it's already in OpenAI format
 		if _, hasChoices := responseMap["choices"]; hasChoices {
 			return responseMap
 		}
 
 		// Handle single generated_text response
 		if generated, ok := responseMap["generated_text"].(string); ok {
+			// Clean up the generated text by removing the input prompt if present
+			content := strings.TrimSpace(generated)
+			return icm.createOpenAIResponse(content)
+		}
+
+		// Handle error responses
+		if errorMsg, ok := responseMap["error"].(string); ok {
 			return map[string]interface{}{
-				"choices": []map[string]interface{}{
-					{
-						"message": map[string]interface{}{
-							"role":    "assistant",
-							"content": generated,
-						},
-						"finish_reason": "stop",
-					},
-				},
-				"usage": map[string]interface{}{
-					"prompt_tokens":     100, // HF doesn't always provide token counts
-					"completion_tokens": len(strings.Fields(generated)),
-					"total_tokens":      100 + len(strings.Fields(generated)),
+				"error": map[string]interface{}{
+					"message": errorMsg,
+					"type":    "api_error",
 				},
 			}
 		}
 	}
 
-	// Handle array response format (common for chat models)
+	// Handle array response format (most common for HF Inference API)
 	if responseArray, ok := hfResponse.([]interface{}); ok && len(responseArray) > 0 {
 		if firstResponse, ok := responseArray[0].(map[string]interface{}); ok {
 			if generated, ok := firstResponse["generated_text"].(string); ok {
-				return map[string]interface{}{
-					"choices": []map[string]interface{}{
-						{
-							"message": map[string]interface{}{
-								"role":    "assistant",
-								"content": generated,
-							},
-							"finish_reason": "stop",
-						},
-					},
-					"usage": map[string]interface{}{
-						"prompt_tokens":     100,
-						"completion_tokens": len(strings.Fields(generated)),
-						"total_tokens":      100 + len(strings.Fields(generated)),
-					},
-				}
+				// Clean up the generated text
+				content := strings.TrimSpace(generated)
+				return icm.createOpenAIResponse(content)
 			}
 		}
 	}
 
 	// Handle direct string response
 	if responseStr, ok := hfResponse.(string); ok {
-		return map[string]interface{}{
-			"choices": []map[string]interface{}{
-				{
-					"message": map[string]interface{}{
-						"role":    "assistant",
-						"content": responseStr,
-					},
-					"finish_reason": "stop",
-				},
-			},
-			"usage": map[string]interface{}{
-				"prompt_tokens":     100,
-				"completion_tokens": len(strings.Fields(responseStr)),
-				"total_tokens":      100 + len(strings.Fields(responseStr)),
-			},
-		}
+		content := strings.TrimSpace(responseStr)
+		return icm.createOpenAIResponse(content)
 	}
 
-	// Fallback: create a generic response
+	// Fallback: create error response for unexpected format
 	return map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": fmt.Sprintf("Unexpected response format from HuggingFace API: %T", hfResponse),
+			"type":    "parse_error",
+		},
+	}
+}
+
+// createOpenAIResponse creates a standardized OpenAI-compatible response
+func (icm *InferenceClientModel) createOpenAIResponse(content string) map[string]interface{} {
+	// Estimate token usage (rough approximation)
+	wordCount := len(strings.Fields(content))
+	estimatedTokens := int(float64(wordCount) * 1.3) // Rough token-to-word ratio
+
+	return map[string]interface{}{
+		"id":      fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   icm.ModelID,
 		"choices": []map[string]interface{}{
 			{
+				"index": 0,
 				"message": map[string]interface{}{
 					"role":    "assistant",
-					"content": fmt.Sprintf("Raw response: %v", hfResponse),
+					"content": content,
 				},
 				"finish_reason": "stop",
 			},
 		},
 		"usage": map[string]interface{}{
-			"prompt_tokens":     100,
-			"completion_tokens": 50,
-			"total_tokens":      150,
+			"prompt_tokens":     100, // HF doesn't provide accurate prompt token counts
+			"completion_tokens": estimatedTokens,
+			"total_tokens":      100 + estimatedTokens,
 		},
 	}
 }

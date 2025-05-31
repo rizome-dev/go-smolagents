@@ -333,39 +333,80 @@ func (bm *BaseModel) ParseToolCalls(message *ChatMessage) (*ChatMessage, error) 
 	// Parse tool calls from content using regex patterns
 	content := *message.Content
 
-	// Pattern to match Action: tool_name and Action Input: {...}
-	actionPattern := regexp.MustCompile(`(?i)action:\s*([^\n]+)`)
-	inputPattern := regexp.MustCompile(`(?i)action\s+input:\s*({.*?})`)
+	// Pattern to match both "Action:" style and "Calling tools:" style
+	patterns := []struct {
+		namePattern string
+		argsPattern string
+	}{
+		// ReAct style: Action: tool_name and Action Input: {...}
+		{`(?i)action:\s*([^\n]+)`, `(?i)action\s+input:\s*({.*?})`},
+		// Tool calling style: - tool_name: map[key:value]
+		{`(?i)-\s*([^:]+):\s*map\[([^\]]+)\]`, ``},
+		// Tool calling style: - tool_name: {...}
+		{`(?i)-\s*([^:]+):\s*({.*?})`, ``},
+	}
 
-	actionMatches := actionPattern.FindStringSubmatch(content)
-	inputMatches := inputPattern.FindStringSubmatch(content)
+	for _, p := range patterns {
+		namePattern := regexp.MustCompile(p.namePattern)
+		nameMatches := namePattern.FindStringSubmatch(content)
+		
+		if len(nameMatches) > 1 {
+			toolName := strings.TrimSpace(nameMatches[1])
+			var arguments interface{}
 
-	if len(actionMatches) > 1 {
-		toolName := strings.TrimSpace(actionMatches[1])
-
-		var arguments interface{}
-		if len(inputMatches) > 1 {
-			// Try to parse as JSON
-			var jsonArgs map[string]interface{}
-			if err := json.Unmarshal([]byte(inputMatches[1]), &jsonArgs); err == nil {
-				arguments = jsonArgs
+			if p.argsPattern != "" {
+				// Use separate args pattern
+				argsPattern := regexp.MustCompile(p.argsPattern)
+				argsMatches := argsPattern.FindStringSubmatch(content)
+				if len(argsMatches) > 1 {
+					var jsonArgs map[string]interface{}
+					if err := json.Unmarshal([]byte(argsMatches[1]), &jsonArgs); err == nil {
+						arguments = jsonArgs
+					} else {
+						arguments = argsMatches[1]
+					}
+				} else {
+					arguments = map[string]interface{}{}
+				}
+			} else if len(nameMatches) > 2 {
+				// Arguments captured in the same pattern
+				argsStr := nameMatches[2]
+				if strings.HasPrefix(argsStr, "{") {
+					// JSON format
+					var jsonArgs map[string]interface{}
+					if err := json.Unmarshal([]byte(argsStr), &jsonArgs); err == nil {
+						arguments = jsonArgs
+					} else {
+						arguments = argsStr
+					}
+				} else {
+					// map[key:value] format - parse manually
+					args := make(map[string]interface{})
+					// Simple parsing for map[answer:text] format
+					if strings.Contains(argsStr, "answer:") {
+						answerPattern := regexp.MustCompile(`answer:(.*)`)
+						if matches := answerPattern.FindStringSubmatch(argsStr); len(matches) > 1 {
+							args["answer"] = strings.TrimSpace(matches[1])
+						}
+					}
+					arguments = args
+				}
 			} else {
-				arguments = inputMatches[1]
+				arguments = map[string]interface{}{}
 			}
-		} else {
-			arguments = map[string]interface{}{}
-		}
 
-		toolCall := ChatMessageToolCall{
-			ID:   fmt.Sprintf("call_%d", len(message.ToolCalls)),
-			Type: "function",
-			Function: ChatMessageToolCallDefinition{
-				Name:      toolName,
-				Arguments: arguments,
-			},
-		}
+			toolCall := ChatMessageToolCall{
+				ID:   fmt.Sprintf("call_%d", len(message.ToolCalls)),
+				Type: "function",
+				Function: ChatMessageToolCallDefinition{
+					Name:      toolName,
+					Arguments: arguments,
+				},
+			}
 
-		message.ToolCalls = append(message.ToolCalls, toolCall)
+			message.ToolCalls = append(message.ToolCalls, toolCall)
+			break // Found a match, stop trying other patterns
+		}
 	}
 
 	return message, nil

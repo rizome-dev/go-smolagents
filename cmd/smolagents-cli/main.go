@@ -1036,9 +1036,12 @@ func createModel() (models.Model, error) {
 	case "openai":
 		modelTypeEnum = models.ModelTypeOpenAIServer
 	case "hf":
-		modelTypeEnum = models.ModelTypeOpenAIServer // HuggingFace now supports OpenAI-compatible API
+		modelTypeEnum = models.ModelTypeInferenceClient // Use the proper HuggingFace Inference API client
 		if baseURL == "" {
-			options["base_url"] = "https://router.huggingface.co/hf-inference/v1"
+			options["base_url"] = "https://api-inference.huggingface.co"
+		}
+		if apiKey != "" {
+			options["token"] = apiKey // HF uses "token" not "api_key"
 		}
 	case "anthropic":
 		modelTypeEnum = models.ModelTypeOpenAIServer // Anthropic uses OpenAI-compatible API

@@ -363,18 +363,24 @@ func (wst *WebSearchTool) forward(args ...interface{}) (interface{}, error) {
 	}
 }
 
-// searchDuckDuckGo performs a DuckDuckGo search
+// searchDuckDuckGo performs a DuckDuckGo search using HTML scraping
 func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
-	// This is a simplified implementation
-	// In a real implementation, this would use the DuckDuckGo API or scraping
-
-	// URL encode the query
+	// Use DuckDuckGo HTML search (more reliable than JSON API for web results)
 	encodedQuery := url.QueryEscape(query)
-	searchURL := fmt.Sprintf("https://duckduckgo.com/?q=%s&format=json&no_html=1", encodedQuery)
+	searchURL := fmt.Sprintf("https://duckduckgo.com/html/?q=%s", encodedQuery)
 
-	// Make HTTP request
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(searchURL)
+	// Create HTTP client with user agent
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("search request failed: %w", err)
+	}
+
+	// Set user agent to avoid blocking
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; smolagents/1.0)")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("search request failed: %w", err)
 	}
@@ -384,15 +390,64 @@ func (wst *WebSearchTool) searchDuckDuckGo(query string) (string, error) {
 		return "", fmt.Errorf("search request failed with status: %d", resp.StatusCode)
 	}
 
-	// Parse response
+	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// This is a placeholder - real implementation would parse DuckDuckGo response
-	return fmt.Sprintf("Search results for '%s':\n\n(Placeholder implementation - would contain actual search results)\n\nRaw response length: %d bytes",
-		query, len(body)), nil
+	// Parse HTML results (simplified extraction)
+	htmlContent := string(body)
+	
+	// Extract search results using regex (basic approach)
+	results := wst.extractSearchResults(htmlContent, query)
+	
+	if len(results) == 0 {
+		return fmt.Sprintf("Search results for '%s':\n\nNo results found or search blocked. Consider using different search terms.", query), nil
+	}
+
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("Search results for '%s':\n\n", query))
+	
+	for i, result := range results {
+		if i >= wst.MaxResults {
+			break
+		}
+		output.WriteString(fmt.Sprintf("%d. %s\n\n", i+1, result))
+	}
+
+	return output.String(), nil
+}
+
+// extractSearchResults extracts search results from DuckDuckGo HTML
+func (wst *WebSearchTool) extractSearchResults(htmlContent, query string) []string {
+	var results []string
+	
+	// Look for result links and titles
+	// DuckDuckGo HTML structure: <a class="result__a" href="...">title</a>
+	linkPattern := regexp.MustCompile(`<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>`)
+	matches := linkPattern.FindAllStringSubmatch(htmlContent, wst.MaxResults)
+	
+	for _, match := range matches {
+		if len(match) >= 3 {
+			url := strings.TrimSpace(match[1])
+			title := strings.TrimSpace(match[2])
+			if title != "" && url != "" {
+				// Clean up the title
+				title = html.UnescapeString(title)
+				result := fmt.Sprintf("**%s**\n%s", title, url)
+				results = append(results, result)
+			}
+		}
+	}
+	
+	// If no results found with that pattern, try a more generic approach
+	if len(results) == 0 {
+		// Return a placeholder indicating search was attempted
+		return []string{fmt.Sprintf("Search attempted for '%s' but no results could be extracted. This may be due to rate limiting or changes in the search provider's HTML structure.", query)}
+	}
+	
+	return results
 }
 
 // VisitWebpageTool visits a webpage and converts it to markdown
