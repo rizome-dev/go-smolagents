@@ -1508,27 +1508,27 @@ func NewSupervisorAgent(model models.Model, config SupervisorConfig) (*Superviso
 		// Note: final_answer tool is automatically added by NewToolCallingAgent
 	}
 
-	supervisorPrompt := `You are an advanced research supervisor agent responsible for coordinating a team of specialized research workers.
+	supervisorPrompt := `You are an advanced research agent capable of conducting comprehensive research on any topic using the available tools.
 
-Your responsibilities include:
-1. Analyzing complex research requests and breaking them into manageable tasks
-2. Determining optimal task allocation strategies
-3. Monitoring research quality and coordinating improvements
-4. Synthesizing results from multiple workers into coherent conclusions
-5. Adapting strategies based on performance metrics
-
-You have access to the following tools:
+Your tools:
 {{tool_descriptions}}
 
-CRITICAL: Always use the final_answer tool to provide your complete analysis and conclusions.
+When given a research task, you should:
+1. Use web_search to find current information from multiple sources
+2. Use wikipedia_search for authoritative background information  
+3. Use visit_webpage to get detailed content from specific sources
+4. Analyze and synthesize the information you gather
+5. Always use final_answer to provide your complete research findings
 
-Use reflection to continuously improve task planning and quality assessment. Consider:
-- Task dependencies and optimal sequencing
-- Worker specializations and current loads
-- Quality metrics and confidence levels
-- Resource constraints and deadlines
+CRITICAL: You must use the final_answer tool to provide your complete research analysis and conclusions.
 
-Be strategic, analytical, and focused on delivering high-quality research outcomes.`
+Research Process:
+- Start with broad web searches to understand the topic
+- Follow up with specific searches for detailed information
+- Cross-reference information from multiple sources
+- Provide comprehensive, well-structured analysis
+
+Be thorough, analytical, and focused on delivering high-quality research outcomes with specific details and examples.`
 
 	supervisorAgent, err := agents.NewToolCallingAgent(model, supervisorTools, supervisorPrompt, map[string]interface{}{
 		"max_steps":   25,
@@ -1849,32 +1849,260 @@ func (s *SupervisorAgent) determineSpecialization(workerType WorkerType, index i
 	return "general"
 }
 
-// Simplified implementation of remaining functions for CLI integration
+// executeTasksWithMonitoring executes tasks with real agents
 func (s *SupervisorAgent) executeTasksWithMonitoring(tasks []*Task) (map[string]*Result, error) {
 	results := make(map[string]*Result)
+	resultsMutex := sync.RWMutex{}
 	
-	// Simple sequential execution for CLI integration
+	log.Printf("Executing %d research tasks with real agents", len(tasks))
+	
+	// Execute tasks sequentially for CLI integration (respecting dependencies)
 	for _, task := range tasks {
-		result := &Result{
-			TaskID:    task.ID,
-			Content:   fmt.Sprintf("Mock result for %s: %s", task.Type, task.Query),
-			Confidence: 0.85,
-			QualityScore: 0.80,
-			CreatedAt: time.Now(),
-			Sources: []Source{
-				{
-					URL: "https://example.com",
-					Title: "Mock Source",
-					Relevance: 0.9,
-					Reliability: 0.8,
-					AccessedAt: time.Now(),
-				},
-			},
+		log.Printf("Executing task %s: %s", task.ID, task.Query)
+		
+		// Find best worker for this task type
+		worker := s.findBestWorkerForTask(task)
+		if worker == nil {
+			log.Printf("No suitable worker found for task %s", task.ID)
+			continue
 		}
+		
+		// Execute task with the selected worker
+		result := s.executeTaskWithWorker(task, worker)
+		
+		resultsMutex.Lock()
 		results[task.ID] = result
+		resultsMutex.Unlock()
+		
+		log.Printf("Completed task %s with quality score %.2f", task.ID, result.QualityScore)
 	}
 	
 	return results, nil
+}
+
+// findBestWorkerForTask finds the most suitable worker for a task
+func (s *SupervisorAgent) findBestWorkerForTask(task *Task) *ResearchWorker {
+	s.workerManager.mutex.RLock()
+	defer s.workerManager.mutex.RUnlock()
+	
+	// Select worker based on task type
+	var preferredType WorkerType
+	switch task.Type {
+	case TaskTypeInitialResearch:
+		preferredType = WorkerTypeWebSearch
+	case TaskTypeDeepDive:
+		preferredType = WorkerTypeAnalysis
+	case TaskTypeFactCheck:
+		preferredType = WorkerTypeFactChecker
+	case TaskTypeSynthesis:
+		preferredType = WorkerTypeSynthesis
+	case TaskTypeQualityCheck:
+		preferredType = WorkerTypeQuality
+	default:
+		preferredType = WorkerTypeGeneral
+	}
+	
+	// Find worker of preferred type
+	for _, worker := range s.workerManager.workers {
+		if worker.Type == preferredType {
+			return worker
+		}
+	}
+	
+	// Fallback to any available worker
+	for _, worker := range s.workerManager.workers {
+		return worker // Return first available worker
+	}
+	
+	return nil
+}
+
+// executeTaskWithWorker executes a task using a specific worker's agent
+func (s *SupervisorAgent) executeTaskWithWorker(task *Task, worker *ResearchWorker) *Result {
+	startTime := time.Now()
+	
+	// Create specialized prompt based on task type and context
+	prompt := s.createTaskPrompt(task, worker)
+	
+	// Execute with the worker's agent (note: we'll use supervisor's agent for now since workers don't have real agents in simplified version)
+	maxSteps := 10
+	agentResult, err := s.agent.Run(&agents.RunOptions{
+		Task:     prompt,
+		MaxSteps: &maxSteps,
+		Context:  s.ctx,
+	})
+	
+	duration := time.Since(startTime)
+	
+	result := &Result{
+		TaskID:    task.ID,
+		WorkerID:  worker.ID,
+		CreatedAt: time.Now(),
+		Metrics: ProcessingMetrics{
+			StartTime: startTime,
+			EndTime:   time.Now(),
+			Duration:  duration,
+		},
+	}
+	
+	if err != nil {
+		log.Printf("Task %s failed: %v", task.ID, err)
+		result.Error = err
+		result.Content = fmt.Sprintf("Task execution failed: %v", err)
+		result.Confidence = 0.0
+		result.QualityScore = 0.0
+	} else {
+		content := fmt.Sprintf("%v", agentResult.Output)
+		result.Content = content
+		result.Confidence = s.assessContentConfidence(content)
+		result.QualityScore = s.assessContentQuality(content)
+		result.Sources = s.extractSourcesFromContent(content)
+		
+		log.Printf("Task %s completed successfully, content length: %d", task.ID, len(content))
+	}
+	
+	return result
+}
+
+// createTaskPrompt creates a specialized prompt for the task
+func (s *SupervisorAgent) createTaskPrompt(task *Task, worker *ResearchWorker) string {
+	basePrompt := fmt.Sprintf(`You are a %s research specialist working on: %s
+
+Task Query: %s
+Task Type: %s
+Priority: %d
+
+`, worker.specialization, task.Query, task.Query, task.Type, task.Priority)
+
+	switch task.Type {
+	case TaskTypeInitialResearch:
+		basePrompt += `Conduct comprehensive initial research on this topic. Use web search tools to gather current information from multiple sources. Focus on:
+1. Current state and overview
+2. Key developments in recent years
+3. Main applications and use cases
+4. Primary challenges and limitations
+
+Provide a thorough analysis with specific examples and data where available.`
+
+	case TaskTypeDeepDive:
+		basePrompt += `Conduct deep, detailed research on this specific aspect. Use web search and other tools to gather comprehensive information. Focus on:
+1. Technical details and mechanisms
+2. Recent advances and breakthroughs
+3. Current research and development efforts
+4. Future prospects and potential
+
+Provide an in-depth analysis with specific technical details and recent developments.`
+
+	case TaskTypeFactCheck:
+		basePrompt += `Verify and fact-check key claims and information about this topic. Use web search tools to cross-reference information from multiple authoritative sources. Focus on:
+1. Validating claims with credible sources
+2. Identifying any contradictory information
+3. Assessing the reliability of different sources
+4. Providing confidence levels for key facts
+
+Provide a thorough fact-checking analysis with source validation.`
+
+	case TaskTypeSynthesis:
+		basePrompt += `Synthesize and combine information from multiple perspectives on this topic. Create a comprehensive overview that:
+1. Integrates findings from different sources
+2. Identifies patterns and connections
+3. Resolves apparent contradictions
+4. Provides a coherent, unified perspective
+
+Provide a well-structured synthesis that brings together multiple viewpoints.`
+
+	case TaskTypeQualityCheck:
+		basePrompt += `Assess and validate the quality of research on this topic. Focus on:
+1. Evaluating the completeness of coverage
+2. Assessing the credibility of sources
+3. Identifying gaps or weaknesses
+4. Providing recommendations for improvement
+
+Provide a quality assessment with specific feedback and recommendations.`
+
+	default:
+		basePrompt += `Conduct thorough research on this topic using all available tools. Provide comprehensive, well-sourced information.`
+	}
+
+	basePrompt += "\n\nIMPORTANT: Use the final_answer tool to provide your complete research findings and analysis."
+	
+	return basePrompt
+}
+
+// Helper functions for content assessment
+func (s *SupervisorAgent) assessContentConfidence(content string) float64 {
+	confidence := 0.5
+	
+	// Basic heuristics for confidence assessment
+	wordCount := len(strings.Fields(content))
+	if wordCount > 200 {
+		confidence += 0.2
+	}
+	if wordCount > 500 {
+		confidence += 0.1
+	}
+	
+	// Check for specific indicators
+	if strings.Contains(content, "research") || strings.Contains(content, "study") {
+		confidence += 0.1
+	}
+	if strings.Contains(content, "data") || strings.Contains(content, "findings") {
+		confidence += 0.1
+	}
+	
+	if confidence > 1.0 {
+		confidence = 1.0
+	}
+	
+	return confidence
+}
+
+func (s *SupervisorAgent) assessContentQuality(content string) float64 {
+	quality := 0.5
+	
+	// Basic heuristics for quality assessment
+	wordCount := len(strings.Fields(content))
+	if wordCount > 300 {
+		quality += 0.1
+	}
+	
+	// Check for structure indicators
+	if strings.Contains(content, "\n") {
+		quality += 0.1
+	}
+	
+	// Check for specificity
+	if strings.Contains(content, "2024") || strings.Contains(content, "2025") {
+		quality += 0.1
+	}
+	
+	// Check for detailed information
+	if strings.Contains(content, "applications") || strings.Contains(content, "challenges") {
+		quality += 0.1
+	}
+	
+	if quality > 1.0 {
+		quality = 1.0
+	}
+	
+	return quality
+}
+
+func (s *SupervisorAgent) extractSourcesFromContent(content string) []Source {
+	sources := []Source{}
+	
+	// Simple source extraction - in practice this would be more sophisticated
+	if len(content) > 100 {
+		sources = append(sources, Source{
+			URL:         "web_research",
+			Title:       "Web Research Results",
+			Relevance:   0.8,
+			Reliability: 0.7,
+			AccessedAt:  time.Now(),
+		})
+	}
+	
+	return sources
 }
 
 func (s *SupervisorAgent) validateAndImproveResults(results map[string]*Result) (map[string]*Result, error) {
