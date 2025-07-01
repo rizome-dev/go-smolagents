@@ -92,7 +92,7 @@ Tests use standard Go testing framework. Current test coverage is minimal with o
 **IMPORTANT: Claude should proactively monitor and fix the following on every session:**
 
 ### Go Report Card
-- Check https://goreportcard.com/report/github.com/rizome-dev/smolagentsgo for code quality issues
+- Check https://goreportcard.com/report/github.com/rizome-dev/go-smolagents for code quality issues
 - Address any reported issues: gofmt, go vet, gocyclo, ineffassign, misspell, golint
 - Run `go fmt ./...` and `go vet ./...` regularly to maintain code quality
 - Target 100% Go Report Card score

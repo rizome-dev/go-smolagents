@@ -15,13 +15,13 @@ package smolagents
 
 // Re-export core types and interfaces from subpackages
 import (
-	"github.com/rizome-dev/smolagentsgo/pkg/agent_types"
-	"github.com/rizome-dev/smolagentsgo/pkg/agents"
-	"github.com/rizome-dev/smolagentsgo/pkg/memory"
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/utils"
+	"github.com/rizome-dev/go-smolagents/pkg/agent_types"
+	"github.com/rizome-dev/go-smolagents/pkg/agents"
+	"github.com/rizome-dev/go-smolagents/pkg/memory"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/monitoring"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/utils"
 )
 
 const Version = "1.18.0"

@@ -1,4 +1,4 @@
-module github.com/rizome-dev/smolagentsgo
+module github.com/rizome-dev/go-smolagents
 
 go 1.23.4
 

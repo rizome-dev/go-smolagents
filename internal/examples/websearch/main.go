@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/agents"
-	"github.com/rizome-dev/smolagentsgo/pkg/default_tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/agents"
+	"github.com/rizome-dev/go-smolagents/pkg/default_tools"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
 )
 
 func main() {

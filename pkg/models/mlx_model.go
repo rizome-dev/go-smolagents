@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
+	"github.com/rizome-dev/go-smolagents/pkg/monitoring"
 )
 
 // MLXModel represents a model using MLX for Apple Silicon

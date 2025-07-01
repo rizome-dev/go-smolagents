@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
+	"github.com/rizome-dev/go-smolagents/pkg/monitoring"
 )
 
 // BedrockClient interface for AWS Bedrock client abstraction

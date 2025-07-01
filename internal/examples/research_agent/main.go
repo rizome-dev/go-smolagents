@@ -19,10 +19,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/agents"
-	"github.com/rizome-dev/smolagentsgo/pkg/default_tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/agents"
+	"github.com/rizome-dev/go-smolagents/pkg/default_tools"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
 )
 
 // Task represents a research task with enhanced metadata
@@ -82,12 +82,12 @@ type Source struct {
 }
 
 type ProcessingMetrics struct {
-	StartTime      time.Time     `json:"start_time"`
-	EndTime        time.Time     `json:"end_time"`
-	Duration       time.Duration `json:"duration"`
-	TokensUsed     int           `json:"tokens_used"`
-	ToolCallCount  int           `json:"tool_call_count"`
-	ReflectionIterations int     `json:"reflection_iterations"`
+	StartTime            time.Time     `json:"start_time"`
+	EndTime              time.Time     `json:"end_time"`
+	Duration             time.Duration `json:"duration"`
+	TokensUsed           int           `json:"tokens_used"`
+	ToolCallCount        int           `json:"tool_call_count"`
+	ReflectionIterations int           `json:"reflection_iterations"`
 }
 
 // SupervisorAgent implements the supervisor pattern for research coordination
@@ -99,14 +99,14 @@ type SupervisorAgent struct {
 	qualityMonitor *QualityMonitor
 	eventBus       *EventBus
 	model          models.Model
-	
+
 	// State management
-	ctx            context.Context
-	cancel         context.CancelFunc
-	metrics        *SystemMetrics
-	
+	ctx     context.Context
+	cancel  context.CancelFunc
+	metrics *SystemMetrics
+
 	// Configuration
-	config         SupervisorConfig
+	config SupervisorConfig
 }
 
 type SupervisorConfig struct {
@@ -122,39 +122,39 @@ type SupervisorConfig struct {
 
 // WorkerManager handles dynamic worker lifecycle management
 type WorkerManager struct {
-	workers        map[string]*ResearchWorker
-	workerPool     chan *ResearchWorker
-	model          models.Model
-	mutex          sync.RWMutex
-	activeWorkers  int64
-	totalCreated   int64
-	
+	workers       map[string]*ResearchWorker
+	workerPool    chan *ResearchWorker
+	model         models.Model
+	mutex         sync.RWMutex
+	activeWorkers int64
+	totalCreated  int64
+
 	// Health monitoring
-	heartbeats     map[string]time.Time
-	healthTicker   *time.Ticker
-	ctx            context.Context
+	heartbeats   map[string]time.Time
+	healthTicker *time.Ticker
+	ctx          context.Context
 }
 
 // ResearchWorker represents a specialized research agent
 type ResearchWorker struct {
-	ID              string
-	Type            WorkerType
-	agent           agents.MultiStepAgent
-	specialization  string
-	tools           []tools.Tool
-	
+	ID             string
+	Type           WorkerType
+	agent          agents.MultiStepAgent
+	specialization string
+	tools          []tools.Tool
+
 	// State
-	isActive        int64 // atomic
-	currentTask     *Task
-	metrics         WorkerMetrics
-	lastHeartbeat   time.Time
-	
+	isActive      int64 // atomic
+	currentTask   *Task
+	metrics       WorkerMetrics
+	lastHeartbeat time.Time
+
 	// Communication
-	taskChan        chan *Task
-	resultChan      chan *Result
-	heartbeatChan   chan WorkerHeartbeat
-	ctx             context.Context
-	cancel          context.CancelFunc
+	taskChan      chan *Task
+	resultChan    chan *Result
+	heartbeatChan chan WorkerHeartbeat
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
 type WorkerType string
@@ -169,40 +169,40 @@ const (
 )
 
 type WorkerMetrics struct {
-	TasksCompleted    int64         `json:"tasks_completed"`
-	TasksFailed       int64         `json:"tasks_failed"`
-	AverageQuality    float64       `json:"average_quality"`
-	AverageConfidence float64       `json:"average_confidence"`
+	TasksCompleted      int64         `json:"tasks_completed"`
+	TasksFailed         int64         `json:"tasks_failed"`
+	AverageQuality      float64       `json:"average_quality"`
+	AverageConfidence   float64       `json:"average_confidence"`
 	TotalProcessingTime time.Duration `json:"total_processing_time"`
-	LastActive        time.Time     `json:"last_active"`
+	LastActive          time.Time     `json:"last_active"`
 }
 
 type WorkerHeartbeat struct {
-	WorkerID    string    `json:"worker_id"`
-	Status      string    `json:"status"`
-	CurrentTask *string   `json:"current_task,omitempty"`
+	WorkerID    string        `json:"worker_id"`
+	Status      string        `json:"status"`
+	CurrentTask *string       `json:"current_task,omitempty"`
 	Metrics     WorkerMetrics `json:"metrics"`
-	Timestamp   time.Time `json:"timestamp"`
+	Timestamp   time.Time     `json:"timestamp"`
 }
 
 // TaskScheduler manages task prioritization and assignment
 type TaskScheduler struct {
-	taskQueue       chan *Task
-	priorityQueues  map[Priority]chan *Task
-	pendingTasks    map[string]*Task
-	completedTasks  map[string]*Result
+	taskQueue        chan *Task
+	priorityQueues   map[Priority]chan *Task
+	pendingTasks     map[string]*Task
+	completedTasks   map[string]*Result
 	taskDependencies map[string][]string
-	mutex          sync.RWMutex
-	
+	mutex            sync.RWMutex
+
 	// Adaptive scheduling
-	loadBalancer   *LoadBalancer
-	ctx            context.Context
+	loadBalancer *LoadBalancer
+	ctx          context.Context
 }
 
 type LoadBalancer struct {
-	workerLoads    map[string]float64
-	taskHistory    []TaskAssignment
-	mutex          sync.RWMutex
+	workerLoads map[string]float64
+	taskHistory []TaskAssignment
+	mutex       sync.RWMutex
 }
 
 type TaskAssignment struct {
@@ -216,11 +216,11 @@ type TaskAssignment struct {
 
 // QualityMonitor implements reflection and quality assurance
 type QualityMonitor struct {
-	qualityAgent    agents.MultiStepAgent
-	thresholds      QualityThresholds
-	metrics         QualityMetrics
-	model           models.Model
-	mutex           sync.RWMutex
+	qualityAgent agents.MultiStepAgent
+	thresholds   QualityThresholds
+	metrics      QualityMetrics
+	model        models.Model
+	mutex        sync.RWMutex
 }
 
 type QualityThresholds struct {
@@ -231,11 +231,11 @@ type QualityThresholds struct {
 }
 
 type QualityMetrics struct {
-	TotalAssessments    int64   `json:"total_assessments"`
-	PassedAssessments   int64   `json:"passed_assessments"`
-	FailedAssessments   int64   `json:"failed_assessments"`
-	AverageQuality      float64 `json:"average_quality"`
-	TrendDirection      string  `json:"trend_direction"`
+	TotalAssessments  int64   `json:"total_assessments"`
+	PassedAssessments int64   `json:"passed_assessments"`
+	FailedAssessments int64   `json:"failed_assessments"`
+	AverageQuality    float64 `json:"average_quality"`
+	TrendDirection    string  `json:"trend_direction"`
 }
 
 // EventBus handles asynchronous communication between components
@@ -257,21 +257,21 @@ type Event struct {
 
 // SystemMetrics tracks overall system performance
 type SystemMetrics struct {
-	ActiveWorkers     int64         `json:"active_workers"`
-	PendingTasks      int64         `json:"pending_tasks"`
-	CompletedTasks    int64         `json:"completed_tasks"`
-	FailedTasks       int64         `json:"failed_tasks"`
-	AverageTaskTime   time.Duration `json:"average_task_time"`
-	SystemThroughput  float64       `json:"system_throughput"`
-	QualityTrend      float64       `json:"quality_trend"`
-	LastUpdated       time.Time     `json:"last_updated"`
-	mutex             sync.RWMutex
+	ActiveWorkers    int64         `json:"active_workers"`
+	PendingTasks     int64         `json:"pending_tasks"`
+	CompletedTasks   int64         `json:"completed_tasks"`
+	FailedTasks      int64         `json:"failed_tasks"`
+	AverageTaskTime  time.Duration `json:"average_task_time"`
+	SystemThroughput float64       `json:"system_throughput"`
+	QualityTrend     float64       `json:"quality_trend"`
+	LastUpdated      time.Time     `json:"last_updated"`
+	mutex            sync.RWMutex
 }
 
 // NewSupervisorAgent creates a new supervisor agent with default configuration
 func NewSupervisorAgent(model models.Model, config SupervisorConfig) (*SupervisorAgent, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Create supervisor agent with enhanced capabilities
 	supervisorTools := []tools.Tool{
 		default_tools.NewWebSearchTool(),
@@ -279,7 +279,7 @@ func NewSupervisorAgent(model models.Model, config SupervisorConfig) (*Superviso
 		default_tools.NewVisitWebpageTool(),
 		default_tools.NewFinalAnswerTool(),
 	}
-	
+
 	supervisorPrompt := `You are an advanced research supervisor agent responsible for coordinating a team of specialized research workers.
 
 Your responsibilities include:
@@ -310,13 +310,13 @@ Be strategic, analytical, and focused on delivering high-quality research outcom
 		cancel()
 		return nil, fmt.Errorf("failed to create supervisor agent: %w", err)
 	}
-	
+
 	// Initialize components
 	eventBus := NewEventBus(ctx)
 	workerManager := NewWorkerManager(model, ctx)
 	taskScheduler := NewTaskScheduler(ctx)
 	qualityMonitor := NewQualityMonitor(model, ctx)
-	
+
 	supervisor := &SupervisorAgent{
 		ID:             "supervisor-1",
 		agent:          supervisorAgent,
@@ -330,12 +330,12 @@ Be strategic, analytical, and focused on delivering high-quality research outcom
 		metrics:        NewSystemMetrics(),
 		config:         config,
 	}
-	
+
 	// Start background processes
 	go supervisor.startHealthMonitoring()
 	go supervisor.startAdaptiveScaling()
 	go supervisor.startMetricsCollection()
-	
+
 	return supervisor, nil
 }
 
@@ -354,12 +354,12 @@ func NewWorkerManager(model models.Model, ctx context.Context) *WorkerManager {
 // NewTaskScheduler creates a new task scheduler
 func NewTaskScheduler(ctx context.Context) *TaskScheduler {
 	return &TaskScheduler{
-		taskQueue:       make(chan *Task, 1000),
-		priorityQueues:  make(map[Priority]chan *Task),
-		pendingTasks:    make(map[string]*Task),
-		completedTasks:  make(map[string]*Result),
+		taskQueue:        make(chan *Task, 1000),
+		priorityQueues:   make(map[Priority]chan *Task),
+		pendingTasks:     make(map[string]*Task),
+		completedTasks:   make(map[string]*Result),
 		taskDependencies: make(map[string][]string),
-		loadBalancer:    &LoadBalancer{
+		loadBalancer: &LoadBalancer{
 			workerLoads: make(map[string]float64),
 			taskHistory: make([]TaskAssignment, 0),
 		},
@@ -373,7 +373,7 @@ func NewQualityMonitor(model models.Model, ctx context.Context) *QualityMonitor 
 		default_tools.NewWebSearchTool(),
 		default_tools.NewFinalAnswerTool(),
 	}
-	
+
 	qualityPrompt := `You are a research quality assessment agent. Your role is to evaluate research results for:
 
 1. Factual accuracy and consistency
@@ -398,7 +398,7 @@ Use the final_answer tool to provide your assessment in JSON format:
 		"max_steps":   15,
 		"temperature": 0.1,
 	})
-	
+
 	return &QualityMonitor{
 		qualityAgent: qualityAgent,
 		thresholds: QualityThresholds{
@@ -430,11 +430,11 @@ func NewSystemMetrics() *SystemMetrics {
 // CreateWorker creates a new specialized research worker
 func (wm *WorkerManager) CreateWorker(workerType WorkerType, specialization string) (*ResearchWorker, error) {
 	workerID := fmt.Sprintf("%s-%d", workerType, atomic.AddInt64(&wm.totalCreated, 1))
-	
+
 	// Create specialized tools based on worker type
 	var workerTools []tools.Tool
 	var workerPrompt string
-	
+
 	switch workerType {
 	case WorkerTypeWebSearch:
 		workerTools = []tools.Tool{
@@ -519,14 +519,14 @@ Focus on:
 
 Always use the final_answer tool with complete findings.`
 	}
-	
+
 	// Add specialization to prompt if provided
 	if specialization != "" {
 		workerPrompt += fmt.Sprintf("\n\nSpecialization: %s", specialization)
 	}
-	
+
 	ctx, cancel := context.WithCancel(wm.ctx)
-	
+
 	workerAgent, err := agents.NewToolCallingAgent(wm.model, workerTools, workerPrompt, map[string]interface{}{
 		"max_steps":   20,
 		"temperature": 0.3,
@@ -535,32 +535,31 @@ Always use the final_answer tool with complete findings.`
 		cancel()
 		return nil, fmt.Errorf("failed to create worker agent: %w", err)
 	}
-	
+
 	worker := &ResearchWorker{
-		ID:              workerID,
-		Type:            workerType,
-		agent:           workerAgent,
-		specialization:  specialization,
-		tools:           workerTools,
-		taskChan:        make(chan *Task, 10),
-		resultChan:      make(chan *Result, 10),
-		heartbeatChan:   make(chan WorkerHeartbeat, 10),
-		ctx:             ctx,
-		cancel:          cancel,
-		lastHeartbeat:   time.Now(),
+		ID:             workerID,
+		Type:           workerType,
+		agent:          workerAgent,
+		specialization: specialization,
+		tools:          workerTools,
+		taskChan:       make(chan *Task, 10),
+		resultChan:     make(chan *Result, 10),
+		heartbeatChan:  make(chan WorkerHeartbeat, 10),
+		ctx:            ctx,
+		cancel:         cancel,
+		lastHeartbeat:  time.Now(),
 	}
-	
+
 	// Start worker goroutine
 	go worker.start()
-	
+
 	// Register worker
 	wm.mutex.Lock()
 	wm.workers[workerID] = worker
 	wm.mutex.Unlock()
-	
+
 	atomic.AddInt64(&wm.activeWorkers, 1)
-	
-	log.Printf("Created %s worker %s with specialization: %s", workerType, workerID, specialization)
+
 	return worker, nil
 }
 
@@ -568,16 +567,15 @@ Always use the final_answer tool with complete findings.`
 func (w *ResearchWorker) start() {
 	ticker := time.NewTicker(30 * time.Second) // Heartbeat interval
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-w.ctx.Done():
-			log.Printf("Worker %s shutting down", w.ID)
 			return
-			
+
 		case task := <-w.taskChan:
 			w.processTask(task)
-			
+
 		case <-ticker.C:
 			w.sendHeartbeat()
 		}
@@ -592,15 +590,15 @@ func (w *ResearchWorker) processTask(task *Task) {
 		atomic.StoreInt64(&w.isActive, 0)
 		w.currentTask = nil
 	}()
-	
+
 	startTime := time.Now()
-	
+
 	// Create enhanced prompt with reflection
 	prompt := w.createReflectivePrompt(task)
-	
+
 	// Execute with reflection pattern
 	result := w.executeWithReflection(task, prompt, startTime)
-	
+
 	// Send result
 	select {
 	case w.resultChan <- result:
@@ -629,7 +627,7 @@ Context: %v
 
 Focus on delivering high-quality, well-sourced, and comprehensive research.`,
 		task.ID, task.Query, task.Type, task.Priority, task.Context)
-	
+
 	return basePrompt
 }
 
@@ -637,13 +635,13 @@ Focus on delivering high-quality, well-sourced, and comprehensive research.`,
 func (w *ResearchWorker) executeWithReflection(task *Task, prompt string, startTime time.Time) *Result {
 	maxIterations := 3
 	bestResult := &Result{
-		TaskID:    task.ID,
-		WorkerID:  w.ID,
-		CreatedAt: time.Now(),
-		Confidence: 0.0,
+		TaskID:       task.ID,
+		WorkerID:     w.ID,
+		CreatedAt:    time.Now(),
+		Confidence:   0.0,
 		QualityScore: 0.0,
 	}
-	
+
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// Execute research
 		maxSteps := 20
@@ -652,17 +650,17 @@ func (w *ResearchWorker) executeWithReflection(task *Task, prompt string, startT
 			MaxSteps: &maxSteps,
 			Context:  w.ctx,
 		})
-		
+
 		if err != nil {
 			bestResult.Error = err
 			break
 		}
-		
+
 		// Assess result quality
 		content := fmt.Sprintf("%v", runResult.Output)
 		confidence := w.assessConfidence(content, task)
 		quality := w.assessQuality(content, task)
-		
+
 		currentResult := &Result{
 			TaskID:       task.ID,
 			WorkerID:     w.ID,
@@ -672,29 +670,29 @@ func (w *ResearchWorker) executeWithReflection(task *Task, prompt string, startT
 			Sources:      w.extractSources(content),
 			Metrics: ProcessingMetrics{
 				StartTime:            startTime,
-				EndTime:             time.Now(),
-				Duration:            time.Since(startTime),
+				EndTime:              time.Now(),
+				Duration:             time.Since(startTime),
 				ReflectionIterations: iteration + 1,
 			},
 			CreatedAt: time.Now(),
 		}
-		
+
 		// Check if this iteration is better
 		if currentResult.QualityScore > bestResult.QualityScore {
 			bestResult = currentResult
 		}
-		
+
 		// If quality is good enough, stop iterating
 		if quality > 0.85 && confidence > 0.8 {
 			break
 		}
-		
+
 		// Create reflection prompt for next iteration
 		if iteration < maxIterations-1 {
 			prompt = w.createReflectionPrompt(content, task, quality, confidence)
 		}
 	}
-	
+
 	return bestResult
 }
 
@@ -723,7 +721,7 @@ Improve upon the previous work while maintaining its strengths.`,
 // assessConfidence estimates confidence based on multiple factors
 func (w *ResearchWorker) assessConfidence(content string, task *Task) float64 {
 	confidence := 0.5 // Base confidence
-	
+
 	// Content length factor
 	wordCount := len(strings.Fields(content))
 	if wordCount > 200 {
@@ -732,7 +730,7 @@ func (w *ResearchWorker) assessConfidence(content string, task *Task) float64 {
 	if wordCount > 500 {
 		confidence += 0.1
 	}
-	
+
 	// Source diversity factor
 	sources := w.extractSources(content)
 	if len(sources) >= 2 {
@@ -741,11 +739,11 @@ func (w *ResearchWorker) assessConfidence(content string, task *Task) float64 {
 	if len(sources) >= 4 {
 		confidence += 0.1
 	}
-	
+
 	// Specificity factor (presence of numbers, dates, names)
 	specificity := w.calculateSpecificity(content)
 	confidence += specificity * 0.2
-	
+
 	// Ensure bounds
 	if confidence > 1.0 {
 		confidence = 1.0
@@ -753,30 +751,30 @@ func (w *ResearchWorker) assessConfidence(content string, task *Task) float64 {
 	if confidence < 0.0 {
 		confidence = 0.0
 	}
-	
+
 	return confidence
 }
 
 // assessQuality estimates quality based on content analysis
 func (w *ResearchWorker) assessQuality(content string, task *Task) float64 {
 	quality := 0.5 // Base quality
-	
+
 	// Structure factor
 	if strings.Contains(content, "#") || strings.Contains(content, "##") {
 		quality += 0.1 // Well structured
 	}
-	
+
 	// Citation factor
 	if strings.Contains(content, "http") || strings.Contains(content, "Source:") {
 		quality += 0.15
 	}
-	
+
 	// Comprehensive factor
 	wordCount := len(strings.Fields(content))
 	if wordCount > 300 {
 		quality += 0.1
 	}
-	
+
 	// Relevance factor (simple keyword matching)
 	queryWords := strings.Fields(strings.ToLower(task.Query))
 	contentLower := strings.ToLower(content)
@@ -788,7 +786,7 @@ func (w *ResearchWorker) assessQuality(content string, task *Task) float64 {
 	}
 	relevanceScore := float64(matchCount) / float64(len(queryWords))
 	quality += relevanceScore * 0.15
-	
+
 	// Ensure bounds
 	if quality > 1.0 {
 		quality = 1.0
@@ -796,14 +794,14 @@ func (w *ResearchWorker) assessQuality(content string, task *Task) float64 {
 	if quality < 0.0 {
 		quality = 0.0
 	}
-	
+
 	return quality
 }
 
 // calculateSpecificity measures how specific the content is
 func (w *ResearchWorker) calculateSpecificity(content string) float64 {
 	specificity := 0.0
-	
+
 	// Count numbers
 	numberCount := len(strings.FieldsFunc(content, func(r rune) bool {
 		return !((r >= '0' && r <= '9') || r == '.' || r == ',')
@@ -811,12 +809,12 @@ func (w *ResearchWorker) calculateSpecificity(content string) float64 {
 	if numberCount > 0 {
 		specificity += 0.3
 	}
-	
+
 	// Count dates (simple pattern)
 	if strings.Contains(content, "2023") || strings.Contains(content, "2024") || strings.Contains(content, "2025") {
 		specificity += 0.3
 	}
-	
+
 	// Count proper nouns (simple heuristic - capitalized words)
 	words := strings.Fields(content)
 	properNouns := 0
@@ -828,14 +826,14 @@ func (w *ResearchWorker) calculateSpecificity(content string) float64 {
 	if properNouns > 5 {
 		specificity += 0.4
 	}
-	
+
 	return math.Min(specificity, 1.0)
 }
 
 // extractSources attempts to extract source information
 func (w *ResearchWorker) extractSources(content string) []Source {
 	sources := []Source{}
-	
+
 	// Simple source extraction - look for URLs and citations
 	if strings.Contains(content, "http") {
 		sources = append(sources, Source{
@@ -846,7 +844,7 @@ func (w *ResearchWorker) extractSources(content string) []Source {
 			AccessedAt:  time.Now(),
 		})
 	}
-	
+
 	if strings.Contains(content, "Wikipedia") {
 		sources = append(sources, Source{
 			URL:         "wikipedia",
@@ -856,7 +854,7 @@ func (w *ResearchWorker) extractSources(content string) []Source {
 			AccessedAt:  time.Now(),
 		})
 	}
-	
+
 	// Estimate based on content quality
 	wordCount := len(strings.Fields(content))
 	if wordCount > 500 {
@@ -868,7 +866,7 @@ func (w *ResearchWorker) extractSources(content string) []Source {
 			AccessedAt:  time.Now(),
 		})
 	}
-	
+
 	return sources
 }
 
@@ -880,17 +878,17 @@ func (w *ResearchWorker) sendHeartbeat() {
 		Metrics:   w.metrics,
 		Timestamp: time.Now(),
 	}
-	
+
 	if w.currentTask != nil {
 		heartbeat.CurrentTask = &w.currentTask.ID
 	}
-	
+
 	select {
 	case w.heartbeatChan <- heartbeat:
 	default:
 		// Channel full, skip this heartbeat
 	}
-	
+
 	w.lastHeartbeat = time.Now()
 }
 
@@ -904,72 +902,70 @@ func (w *ResearchWorker) getStatus() string {
 
 // ExecuteResearchProject orchestrates a complete research project
 func (s *SupervisorAgent) ExecuteResearchProject(topic string, requirements map[string]interface{}) (*ProjectReport, error) {
-	log.Printf("Starting advanced research project: %s", topic)
-	
+
 	// Phase 1: Intelligent Planning with Reflection
 	planningResult, err := s.planResearchProject(topic, requirements)
 	if err != nil {
 		return nil, fmt.Errorf("planning phase failed: %w", err)
 	}
-	
+
 	// Phase 2: Dynamic Worker Allocation
 	err = s.allocateWorkers(planningResult.RequiredWorkers)
 	if err != nil {
 		return nil, fmt.Errorf("worker allocation failed: %w", err)
 	}
-	
+
 	// Phase 3: Asynchronous Task Execution with Monitoring
 	results, err := s.executeTasksWithMonitoring(planningResult.Tasks)
 	if err != nil {
 		return nil, fmt.Errorf("task execution failed: %w", err)
 	}
-	
+
 	// Phase 4: Quality Assurance and Validation
 	validatedResults, err := s.validateAndImproveResults(results)
 	if err != nil {
 		return nil, fmt.Errorf("quality validation failed: %w", err)
 	}
-	
+
 	// Phase 5: Synthesis with Multiple Perspectives
 	finalReport, err := s.synthesizeResults(topic, validatedResults, requirements)
 	if err != nil {
 		return nil, fmt.Errorf("synthesis failed: %w", err)
 	}
-	
-	log.Printf("Advanced research project completed: %s", topic)
+
 	return finalReport, nil
 }
 
 // ProjectReport represents the final comprehensive research report
 type ProjectReport struct {
-	Topic           string                 `json:"topic"`
-	ExecutiveSummary string                `json:"executive_summary"`
-	Findings        []Finding              `json:"findings"`
-	Methodology     string                 `json:"methodology"`
-	QualityMetrics  QualityAssessment      `json:"quality_metrics"`
-	Sources         []Source               `json:"sources"`
-	Confidence      float64                `json:"confidence"`
-	Limitations     []string               `json:"limitations"`
-	Recommendations []string               `json:"recommendations"`
-	Metadata        ProjectMetadata        `json:"metadata"`
+	Topic            string            `json:"topic"`
+	ExecutiveSummary string            `json:"executive_summary"`
+	Findings         []Finding         `json:"findings"`
+	Methodology      string            `json:"methodology"`
+	QualityMetrics   QualityAssessment `json:"quality_metrics"`
+	Sources          []Source          `json:"sources"`
+	Confidence       float64           `json:"confidence"`
+	Limitations      []string          `json:"limitations"`
+	Recommendations  []string          `json:"recommendations"`
+	Metadata         ProjectMetadata   `json:"metadata"`
 }
 
 type Finding struct {
-	Title       string   `json:"title"`
-	Content     string   `json:"content"`
-	Confidence  float64  `json:"confidence"`
-	Sources     []Source `json:"sources"`
-	Category    string   `json:"category"`
-	Importance  float64  `json:"importance"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	Confidence float64  `json:"confidence"`
+	Sources    []Source `json:"sources"`
+	Category   string   `json:"category"`
+	Importance float64  `json:"importance"`
 }
 
 type QualityAssessment struct {
-	OverallQuality    float64   `json:"overall_quality"`
-	FactualAccuracy   float64   `json:"factual_accuracy"`
-	Completeness      float64   `json:"completeness"`
-	SourceQuality     float64   `json:"source_quality"`
-	Consistency       float64   `json:"consistency"`
-	AssessmentDate    time.Time `json:"assessment_date"`
+	OverallQuality  float64   `json:"overall_quality"`
+	FactualAccuracy float64   `json:"factual_accuracy"`
+	Completeness    float64   `json:"completeness"`
+	SourceQuality   float64   `json:"source_quality"`
+	Consistency     float64   `json:"consistency"`
+	AssessmentDate  time.Time `json:"assessment_date"`
 }
 
 type ProjectMetadata struct {
@@ -984,11 +980,11 @@ type ProjectMetadata struct {
 
 // PlanningResult represents the output of the planning phase
 type PlanningResult struct {
-	Tasks           []*Task                `json:"tasks"`
-	RequiredWorkers map[WorkerType]int     `json:"required_workers"`
-	Strategy        string                 `json:"strategy"`
-	Timeline        map[string]time.Time   `json:"timeline"`
-	Dependencies    map[string][]string    `json:"dependencies"`
+	Tasks           []*Task              `json:"tasks"`
+	RequiredWorkers map[WorkerType]int   `json:"required_workers"`
+	Strategy        string               `json:"strategy"`
+	Timeline        map[string]time.Time `json:"timeline"`
+	Dependencies    map[string][]string  `json:"dependencies"`
 }
 
 // planResearchProject creates an intelligent research plan
@@ -1018,14 +1014,14 @@ Provide a detailed research strategy using the final_answer tool.`, topic, requi
 		MaxSteps: &maxSteps,
 		Context:  s.ctx,
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("planning execution failed: %w", err)
 	}
-	
+
 	// Parse planning result and create tasks
 	tasks := s.parseIntelligentPlan(fmt.Sprintf("%v", planningResult.Output), topic)
-	
+
 	return &PlanningResult{
 		Tasks: tasks,
 		RequiredWorkers: map[WorkerType]int{
@@ -1035,8 +1031,8 @@ Provide a detailed research strategy using the final_answer tool.`, topic, requi
 			WorkerTypeFactChecker: 1,
 			WorkerTypeQuality:     1,
 		},
-		Strategy: fmt.Sprintf("%v", planningResult.Output),
-		Timeline: make(map[string]time.Time),
+		Strategy:     fmt.Sprintf("%v", planningResult.Output),
+		Timeline:     make(map[string]time.Time),
 		Dependencies: make(map[string][]string),
 	}, nil
 }
@@ -1045,66 +1041,66 @@ Provide a detailed research strategy using the final_answer tool.`, topic, requi
 func (s *SupervisorAgent) parseIntelligentPlan(planContent, topic string) []*Task {
 	tasks := []*Task{
 		{
-			ID:       "initial-research-1",
-			Type:     TaskTypeInitialResearch,
-			Query:    fmt.Sprintf("Comprehensive overview and current state of %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "initial", "focus": "overview"},
-			CreatedAt: time.Now(),
+			ID:         "initial-research-1",
+			Type:       TaskTypeInitialResearch,
+			Query:      fmt.Sprintf("Comprehensive overview and current state of %s", topic),
+			Priority:   PriorityHigh,
+			Context:    map[string]string{"phase": "initial", "focus": "overview"},
+			CreatedAt:  time.Now(),
 			MaxRetries: 2,
 		},
 		{
-			ID:       "deep-dive-1",
-			Type:     TaskTypeDeepDive,
-			Query:    fmt.Sprintf("Historical development and key milestones in %s", topic),
-			Priority: PriorityMedium,
-			Context:  map[string]string{"phase": "deep_dive", "focus": "history"},
+			ID:           "deep-dive-1",
+			Type:         TaskTypeDeepDive,
+			Query:        fmt.Sprintf("Historical development and key milestones in %s", topic),
+			Priority:     PriorityMedium,
+			Context:      map[string]string{"phase": "deep_dive", "focus": "history"},
 			Dependencies: []string{"initial-research-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "deep-dive-2",
-			Type:     TaskTypeDeepDive,
-			Query:    fmt.Sprintf("Current trends and recent developments in %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "deep_dive", "focus": "current"},
+			ID:           "deep-dive-2",
+			Type:         TaskTypeDeepDive,
+			Query:        fmt.Sprintf("Current trends and recent developments in %s", topic),
+			Priority:     PriorityHigh,
+			Context:      map[string]string{"phase": "deep_dive", "focus": "current"},
 			Dependencies: []string{"initial-research-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "fact-check-1",
-			Type:     TaskTypeFactCheck,
-			Query:    fmt.Sprintf("Verify key claims and statistics about %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "validation", "focus": "facts"},
+			ID:           "fact-check-1",
+			Type:         TaskTypeFactCheck,
+			Query:        fmt.Sprintf("Verify key claims and statistics about %s", topic),
+			Priority:     PriorityHigh,
+			Context:      map[string]string{"phase": "validation", "focus": "facts"},
 			Dependencies: []string{"deep-dive-1", "deep-dive-2"},
-			CreatedAt: time.Now(),
-			MaxRetries: 3,
+			CreatedAt:    time.Now(),
+			MaxRetries:   3,
 		},
 		{
-			ID:       "synthesis-1",
-			Type:     TaskTypeSynthesis,
-			Query:    fmt.Sprintf("Synthesize comprehensive understanding of %s with multiple perspectives", topic),
-			Priority: PriorityCritical,
-			Context:  map[string]string{"phase": "synthesis", "focus": "comprehensive"},
+			ID:           "synthesis-1",
+			Type:         TaskTypeSynthesis,
+			Query:        fmt.Sprintf("Synthesize comprehensive understanding of %s with multiple perspectives", topic),
+			Priority:     PriorityCritical,
+			Context:      map[string]string{"phase": "synthesis", "focus": "comprehensive"},
 			Dependencies: []string{"fact-check-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "quality-check-1",
-			Type:     TaskTypeQualityCheck,
-			Query:    fmt.Sprintf("Quality assessment and final validation of %s research", topic),
-			Priority: PriorityCritical,
-			Context:  map[string]string{"phase": "validation", "focus": "quality"},
+			ID:           "quality-check-1",
+			Type:         TaskTypeQualityCheck,
+			Query:        fmt.Sprintf("Quality assessment and final validation of %s research", topic),
+			Priority:     PriorityCritical,
+			Context:      map[string]string{"phase": "validation", "focus": "quality"},
 			Dependencies: []string{"synthesis-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 1,
+			CreatedAt:    time.Now(),
+			MaxRetries:   1,
 		},
 	}
-	
+
 	return tasks
 }
 
@@ -1131,7 +1127,7 @@ func (s *SupervisorAgent) determineSpecialization(workerType WorkerType, index i
 		WorkerTypeFactChecker: {"statistical verification", "source credibility"},
 		WorkerTypeQuality:     {"comprehensive assessment"},
 	}
-	
+
 	if specs, exists := specializations[workerType]; exists && index < len(specs) {
 		return specs[index]
 	}
@@ -1142,35 +1138,35 @@ func (s *SupervisorAgent) determineSpecialization(workerType WorkerType, index i
 func (s *SupervisorAgent) executeTasksWithMonitoring(tasks []*Task) (map[string]*Result, error) {
 	results := make(map[string]*Result)
 	resultsMutex := sync.RWMutex{}
-	
+
 	// Create task dependency graph (for future dependency management)
 	_ = s.buildDependencyGraph(tasks)
-	
+
 	// Execute tasks respecting dependencies
 	taskWG := sync.WaitGroup{}
-	
+
 	for _, task := range tasks {
 		taskWG.Add(1)
 		go func(t *Task) {
 			defer taskWG.Done()
-			
+
 			// Wait for dependencies
 			s.waitForDependencies(t, results, &resultsMutex)
-			
+
 			// Execute task with best available worker
 			result := s.executeTaskWithBestWorker(t)
-			
+
 			// Store result
 			resultsMutex.Lock()
 			results[t.ID] = result
 			resultsMutex.Unlock()
-			
+
 			// Update metrics
 			s.updateTaskMetrics(result)
-			
+
 		}(task)
 	}
-	
+
 	taskWG.Wait()
 	return results, nil
 }
@@ -1193,11 +1189,11 @@ func (s *SupervisorAgent) waitForDependencies(task *Task, results map[string]*Re
 			mutex.RLock()
 			_, exists := results[depID]
 			mutex.RUnlock()
-			
+
 			if exists {
 				break
 			}
-			
+
 			time.Sleep(1 * time.Second)
 		}
 	}
@@ -1214,7 +1210,7 @@ func (s *SupervisorAgent) executeTaskWithBestWorker(task *Task) *Result {
 			CreatedAt: time.Now(),
 		}
 	}
-	
+
 	// Execute task
 	select {
 	case bestWorker.taskChan <- task:
@@ -1244,29 +1240,29 @@ func (s *SupervisorAgent) executeTaskWithBestWorker(task *Task) *Result {
 func (s *SupervisorAgent) findBestWorker(task *Task) *ResearchWorker {
 	s.workerManager.mutex.RLock()
 	defer s.workerManager.mutex.RUnlock()
-	
+
 	var bestWorker *ResearchWorker
 	bestScore := -1.0
-	
+
 	for _, worker := range s.workerManager.workers {
 		if atomic.LoadInt64(&worker.isActive) == 1 {
 			continue // Worker is busy
 		}
-		
+
 		score := s.calculateWorkerScore(worker, task)
 		if score > bestScore {
 			bestScore = score
 			bestWorker = worker
 		}
 	}
-	
+
 	return bestWorker
 }
 
 // calculateWorkerScore calculates how suitable a worker is for a task
 func (s *SupervisorAgent) calculateWorkerScore(worker *ResearchWorker, task *Task) float64 {
 	score := 0.0
-	
+
 	// Type matching
 	switch task.Type {
 	case TaskTypeInitialResearch:
@@ -1290,13 +1286,13 @@ func (s *SupervisorAgent) calculateWorkerScore(worker *ResearchWorker, task *Tas
 			score += 0.8
 		}
 	}
-	
+
 	// Performance history
 	if worker.metrics.TasksCompleted > 0 {
 		score += worker.metrics.AverageQuality * 0.3
 		score += worker.metrics.AverageConfidence * 0.2
 	}
-	
+
 	return score
 }
 
@@ -1304,15 +1300,15 @@ func (s *SupervisorAgent) calculateWorkerScore(worker *ResearchWorker, task *Tas
 func (s *SupervisorAgent) updateTaskMetrics(result *Result) {
 	s.metrics.mutex.Lock()
 	defer s.metrics.mutex.Unlock()
-	
+
 	if result.Error != nil {
 		s.metrics.FailedTasks++
 	} else {
 		s.metrics.CompletedTasks++
 	}
-	
+
 	s.metrics.LastUpdated = time.Now()
-	
+
 	// Update throughput calculation
 	totalTasks := s.metrics.CompletedTasks + s.metrics.FailedTasks
 	if totalTasks > 0 {
@@ -1323,26 +1319,24 @@ func (s *SupervisorAgent) updateTaskMetrics(result *Result) {
 // validateAndImproveResults performs quality validation and improvement
 func (s *SupervisorAgent) validateAndImproveResults(results map[string]*Result) (map[string]*Result, error) {
 	validatedResults := make(map[string]*Result)
-	
+
 	for taskID, result := range results {
 		if result.Error != nil {
 			validatedResults[taskID] = result
 			continue
 		}
-		
+
 		// Quality assessment
 		qualityAssessment, err := s.qualityMonitor.assessQuality(result)
 		if err != nil {
-			log.Printf("Quality assessment failed for task %s: %v", taskID, err)
 			validatedResults[taskID] = result
 			continue
 		}
-		
+
 		// If quality is below threshold, attempt improvement
 		if qualityAssessment.QualityScore < s.config.QualityThreshold {
 			improvedResult, err := s.improveResult(result, qualityAssessment)
 			if err != nil {
-				log.Printf("Result improvement failed for task %s: %v", taskID, err)
 				validatedResults[taskID] = result
 			} else {
 				validatedResults[taskID] = improvedResult
@@ -1351,7 +1345,7 @@ func (s *SupervisorAgent) validateAndImproveResults(results map[string]*Result) 
 			validatedResults[taskID] = result
 		}
 	}
-	
+
 	return validatedResults, nil
 }
 
@@ -1359,29 +1353,29 @@ func (s *SupervisorAgent) validateAndImproveResults(results map[string]*Result) 
 func (s *SupervisorAgent) improveResult(result *Result, assessment *QualityAssessmentResult) (*Result, error) {
 	// Create improvement task
 	improvementTask := &Task{
-		ID:    fmt.Sprintf("%s-improvement", result.TaskID),
-		Type:  TaskTypeQualityCheck,
-		Query: fmt.Sprintf("Improve the following research result based on quality issues: %s\n\nOriginal result: %s\n\nIssues: %v", result.TaskID, result.Content, assessment.Issues),
+		ID:       fmt.Sprintf("%s-improvement", result.TaskID),
+		Type:     TaskTypeQualityCheck,
+		Query:    fmt.Sprintf("Improve the following research result based on quality issues: %s\n\nOriginal result: %s\n\nIssues: %v", result.TaskID, result.Content, assessment.Issues),
 		Priority: PriorityHigh,
 		Context: map[string]string{
 			"original_task": result.TaskID,
-			"improvement": "true",
+			"improvement":   "true",
 		},
-		CreatedAt: time.Now(),
+		CreatedAt:  time.Now(),
 		MaxRetries: 1,
 	}
-	
+
 	// Execute improvement
 	improvedResult := s.executeTaskWithBestWorker(improvementTask)
 	if improvedResult.Error != nil {
 		return result, improvedResult.Error
 	}
-	
+
 	// Update original result
 	result.Content = improvedResult.Content
 	result.QualityScore = improvedResult.QualityScore
 	result.Confidence = improvedResult.Confidence
-	
+
 	return result, nil
 }
 
@@ -1411,7 +1405,7 @@ Evaluate for:
 3. Completeness and comprehensiveness
 4. Logical structure and clarity
 
-Provide assessment in JSON format using final_answer tool.`, 
+Provide assessment in JSON format using final_answer tool.`,
 		result.TaskID, result.Content, result.Sources, result.Confidence)
 
 	maxSteps := 10
@@ -1419,14 +1413,14 @@ Provide assessment in JSON format using final_answer tool.`,
 		Task:     assessmentPrompt,
 		MaxSteps: &maxSteps,
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("quality assessment failed: %w", err)
 	}
-	
+
 	// Parse assessment result (simplified for this implementation)
 	var assessment QualityAssessmentResult
-	
+
 	// Simple parsing - in production, use proper JSON extraction
 	assessment.QualityScore = result.QualityScore
 	assessment.ConfidenceScore = result.Confidence
@@ -1435,7 +1429,7 @@ Provide assessment in JSON format using final_answer tool.`,
 	assessment.FactualAccuracy = 0.85
 	assessment.SourceQuality = 0.80
 	assessment.Completeness = 0.75
-	
+
 	// Update quality metrics
 	qm.mutex.Lock()
 	qm.metrics.TotalAssessments++
@@ -1445,7 +1439,7 @@ Provide assessment in JSON format using final_answer tool.`,
 		qm.metrics.FailedAssessments++
 	}
 	qm.mutex.Unlock()
-	
+
 	return &assessment, nil
 }
 
@@ -1456,7 +1450,7 @@ func (s *SupervisorAgent) synthesizeResults(topic string, results map[string]*Re
 	var allSources []Source
 	totalConfidence := 0.0
 	successCount := 0
-	
+
 	for _, result := range results {
 		if result.Error == nil {
 			allContent = append(allContent, fmt.Sprintf("## %s\n\n%s", result.TaskID, result.Content))
@@ -1465,12 +1459,12 @@ func (s *SupervisorAgent) synthesizeResults(topic string, results map[string]*Re
 			successCount++
 		}
 	}
-	
+
 	avgConfidence := 0.0
 	if successCount > 0 {
 		avgConfidence = totalConfidence / float64(successCount)
 	}
-	
+
 	// Create synthesis prompt
 	synthesisPrompt := fmt.Sprintf(`As an expert research analyst, create a comprehensive research report for: "%s"
 
@@ -1503,17 +1497,17 @@ Use the final_answer tool with the complete report.`,
 		MaxSteps: &maxSteps,
 		Context:  s.ctx,
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("synthesis execution failed: %w", err)
 	}
-	
+
 	// Create final report
 	report := &ProjectReport{
-		Topic:           topic,
+		Topic:            topic,
 		ExecutiveSummary: fmt.Sprintf("%v", synthesisResult.Output),
-		Findings:        s.extractFindings(allContent),
-		Methodology:     "Advanced multi-agent research with quality validation and synthesis",
+		Findings:         s.extractFindings(allContent),
+		Methodology:      "Advanced multi-agent research with quality validation and synthesis",
 		QualityMetrics: QualityAssessment{
 			OverallQuality:  s.calculateOverallQuality(results),
 			FactualAccuracy: 0.85,
@@ -1522,9 +1516,9 @@ Use the final_answer tool with the complete report.`,
 			Consistency:     0.85,
 			AssessmentDate:  time.Now(),
 		},
-		Sources:        s.deduplicateSources(allSources),
-		Confidence:     avgConfidence,
-		Limitations:    s.identifyLimitations(results),
+		Sources:         s.deduplicateSources(allSources),
+		Confidence:      avgConfidence,
+		Limitations:     s.identifyLimitations(results),
 		Recommendations: s.generateRecommendations(topic, results),
 		Metadata: ProjectMetadata{
 			StartTime:     time.Now().Add(-30 * time.Minute), // Approximate
@@ -1535,14 +1529,14 @@ Use the final_answer tool with the complete report.`,
 			TokensUsed:    s.estimateTokenUsage(results),
 		},
 	}
-	
+
 	return report, nil
 }
 
 // extractFindings extracts key findings from content
 func (s *SupervisorAgent) extractFindings(allContent []string) []Finding {
 	findings := []Finding{}
-	
+
 	for i, content := range allContent {
 		finding := Finding{
 			Title:      fmt.Sprintf("Finding %d", i+1),
@@ -1553,7 +1547,7 @@ func (s *SupervisorAgent) extractFindings(allContent []string) []Finding {
 		}
 		findings = append(findings, finding)
 	}
-	
+
 	return findings
 }
 
@@ -1561,18 +1555,18 @@ func (s *SupervisorAgent) extractFindings(allContent []string) []Finding {
 func (s *SupervisorAgent) calculateOverallQuality(results map[string]*Result) float64 {
 	total := 0.0
 	count := 0
-	
+
 	for _, result := range results {
 		if result.Error == nil {
 			total += result.QualityScore
 			count++
 		}
 	}
-	
+
 	if count == 0 {
 		return 0.0
 	}
-	
+
 	return total / float64(count)
 }
 
@@ -1580,7 +1574,7 @@ func (s *SupervisorAgent) calculateOverallQuality(results map[string]*Result) fl
 func (s *SupervisorAgent) deduplicateSources(sources []Source) []Source {
 	seen := make(map[string]bool)
 	unique := []Source{}
-	
+
 	for _, source := range sources {
 		key := source.URL + source.Title
 		if !seen[key] {
@@ -1588,28 +1582,28 @@ func (s *SupervisorAgent) deduplicateSources(sources []Source) []Source {
 			unique = append(unique, source)
 		}
 	}
-	
+
 	return unique
 }
 
 // identifyLimitations identifies research limitations
 func (s *SupervisorAgent) identifyLimitations(results map[string]*Result) []string {
 	limitations := []string{}
-	
+
 	failedCount := 0
 	for _, result := range results {
 		if result.Error != nil {
 			failedCount++
 		}
 	}
-	
+
 	if failedCount > 0 {
 		limitations = append(limitations, fmt.Sprintf("%d research tasks failed to complete", failedCount))
 	}
-	
+
 	limitations = append(limitations, "Research limited to publicly available sources")
 	limitations = append(limitations, "Time constraints may have limited depth of investigation")
-	
+
 	return limitations
 }
 
@@ -1621,7 +1615,7 @@ func (s *SupervisorAgent) generateRecommendations(topic string, results map[stri
 		"Monitor for new developments and updates",
 		"Cross-reference with peer-reviewed publications",
 	}
-	
+
 	return recommendations
 }
 
@@ -1638,7 +1632,7 @@ func (s *SupervisorAgent) estimateTokenUsage(results map[string]*Result) int {
 func (s *SupervisorAgent) startHealthMonitoring() {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -1653,11 +1647,12 @@ func (s *SupervisorAgent) startHealthMonitoring() {
 func (s *SupervisorAgent) checkWorkerHealth() {
 	s.workerManager.mutex.RLock()
 	defer s.workerManager.mutex.RUnlock()
-	
+
 	now := time.Now()
 	for workerID, worker := range s.workerManager.workers {
 		if now.Sub(worker.lastHeartbeat) > 60*time.Second {
-			log.Printf("Worker %s appears unhealthy, last heartbeat: %v", workerID, worker.lastHeartbeat)
+			// Worker appears unhealthy - in production, implement worker restart logic
+			_ = workerID // Suppress unused variable warning
 			// In production, implement worker restart logic
 		}
 	}
@@ -1667,7 +1662,7 @@ func (s *SupervisorAgent) checkWorkerHealth() {
 func (s *SupervisorAgent) startAdaptiveScaling() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -1685,14 +1680,12 @@ func (s *SupervisorAgent) evaluateScaling() {
 	pendingTasks := s.metrics.PendingTasks
 	throughput := s.metrics.SystemThroughput
 	s.metrics.mutex.RUnlock()
-	
+
 	// Simple scaling logic
 	if pendingTasks > 0 && throughput > s.config.ScaleUpThreshold && currentWorkers < int64(s.config.MaxWorkers) {
-		log.Printf("Scaling up: %d pending tasks, throughput: %.2f", pendingTasks, throughput)
 		// Create additional worker
 		s.workerManager.CreateWorker(WorkerTypeGeneral, "auto-scaled")
 	} else if pendingTasks == 0 && currentWorkers > int64(s.config.MinWorkers) {
-		log.Printf("Considering scale down: no pending tasks")
 		// In production, implement worker shutdown logic
 	}
 }
@@ -1701,7 +1694,7 @@ func (s *SupervisorAgent) evaluateScaling() {
 func (s *SupervisorAgent) startMetricsCollection() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -1716,7 +1709,7 @@ func (s *SupervisorAgent) startMetricsCollection() {
 func (s *SupervisorAgent) collectMetrics() {
 	s.metrics.mutex.Lock()
 	defer s.metrics.mutex.Unlock()
-	
+
 	s.metrics.ActiveWorkers = atomic.LoadInt64(&s.workerManager.activeWorkers)
 	s.metrics.PendingTasks = int64(len(s.taskScheduler.taskQueue))
 	s.metrics.LastUpdated = time.Now()
@@ -1724,24 +1717,22 @@ func (s *SupervisorAgent) collectMetrics() {
 
 // Stop gracefully shuts down the supervisor and all workers
 func (s *SupervisorAgent) Stop() {
-	log.Println("Shutting down supervisor agent and all workers")
-	
+
 	// Cancel context to signal shutdown
 	s.cancel()
-	
+
 	// Stop all workers
 	s.workerManager.mutex.Lock()
 	for _, worker := range s.workerManager.workers {
 		worker.cancel()
 	}
 	s.workerManager.mutex.Unlock()
-	
+
 	// Stop health monitoring
 	if s.workerManager.healthTicker != nil {
 		s.workerManager.healthTicker.Stop()
 	}
-	
-	log.Println("Supervisor agent shutdown complete")
+
 }
 
 // PrintAdvancedReport displays a comprehensive project report
@@ -1749,7 +1740,7 @@ func PrintAdvancedReport(report *ProjectReport) {
 	fmt.Printf("\n" + strings.Repeat("=", 100) + "\n")
 	fmt.Printf("                    ADVANCED AGENTIC RESEARCH REPORT\n")
 	fmt.Printf(strings.Repeat("=", 100) + "\n\n")
-	
+
 	fmt.Printf("📋 Topic: %s\n", report.Topic)
 	fmt.Printf("⏱️  Duration: %v\n", report.Metadata.Duration)
 	fmt.Printf("👥 Workers Used: %d\n", report.Metadata.WorkersUsed)
@@ -1757,11 +1748,11 @@ func PrintAdvancedReport(report *ProjectReport) {
 	fmt.Printf("🎯 Overall Confidence: %.1f%%\n", report.Confidence*100)
 	fmt.Printf("⭐ Quality Score: %.1f%%\n", report.QualityMetrics.OverallQuality*100)
 	fmt.Printf("📚 Sources: %d unique sources\n\n", len(report.Sources))
-	
+
 	fmt.Printf("EXECUTIVE SUMMARY\n")
 	fmt.Printf(strings.Repeat("-", 100) + "\n\n")
 	fmt.Printf("%s\n\n", report.ExecutiveSummary)
-	
+
 	fmt.Printf("KEY FINDINGS\n")
 	fmt.Printf(strings.Repeat("-", 100) + "\n\n")
 	for i, finding := range report.Findings {
@@ -1771,7 +1762,7 @@ func PrintAdvancedReport(report *ProjectReport) {
 			fmt.Printf("   %s\n\n", finding.Content[:min(200, len(finding.Content))])
 		}
 	}
-	
+
 	fmt.Printf("QUALITY METRICS\n")
 	fmt.Printf(strings.Repeat("-", 100) + "\n\n")
 	fmt.Printf("Overall Quality:    %.1f%%\n", report.QualityMetrics.OverallQuality*100)
@@ -1779,11 +1770,11 @@ func PrintAdvancedReport(report *ProjectReport) {
 	fmt.Printf("Completeness:       %.1f%%\n", report.QualityMetrics.Completeness*100)
 	fmt.Printf("Source Quality:     %.1f%%\n", report.QualityMetrics.SourceQuality*100)
 	fmt.Printf("Consistency:        %.1f%%\n", report.QualityMetrics.Consistency*100)
-	
+
 	fmt.Printf("\nMETHODOLOGY\n")
 	fmt.Printf(strings.Repeat("-", 100) + "\n\n")
 	fmt.Printf("%s\n", report.Methodology)
-	
+
 	if len(report.Limitations) > 0 {
 		fmt.Printf("\nLIMITATIONS\n")
 		fmt.Printf(strings.Repeat("-", 100) + "\n\n")
@@ -1791,7 +1782,7 @@ func PrintAdvancedReport(report *ProjectReport) {
 			fmt.Printf("• %s\n", limitation)
 		}
 	}
-	
+
 	if len(report.Recommendations) > 0 {
 		fmt.Printf("\nRECOMMENDATIONS\n")
 		fmt.Printf(strings.Repeat("-", 100) + "\n\n")
@@ -1799,7 +1790,7 @@ func PrintAdvancedReport(report *ProjectReport) {
 			fmt.Printf("• %s\n", recommendation)
 		}
 	}
-	
+
 	fmt.Printf("\n" + strings.Repeat("=", 100) + "\n")
 }
 
@@ -1812,18 +1803,18 @@ func min(a, b int) int {
 
 // main demonstrates the advanced agentic research system
 func main() {
-	fmt.Println("🤖 Advanced Agentic Research System")
-	fmt.Println("=====================================")
-	
+	fmt.Println("Advanced Agentic Research System")
+	fmt.Println("===============================")
+
 	// Check for required environment variables
 	if os.Getenv("HF_API_TOKEN") == "" && os.Getenv("OPENAI_API_KEY") == "" {
 		log.Fatal("Please set HF_API_TOKEN or OPENAI_API_KEY environment variable")
 	}
-	
+
 	// Create model
 	var model models.Model
 	var err error
-	
+
 	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		model, err = models.CreateModel(models.ModelTypeOpenAIServer, "gpt-4", map[string]interface{}{
 			"api_key":     apiKey,
@@ -1835,11 +1826,11 @@ func main() {
 			"temperature": 0.2,
 		})
 	}
-	
+
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
 	}
-	
+
 	// Create supervisor configuration
 	config := SupervisorConfig{
 		MaxWorkers:          8,
@@ -1851,35 +1842,32 @@ func main() {
 		ScaleUpThreshold:    0.8,
 		ScaleDownThreshold:  0.3,
 	}
-	
+
 	// Create supervisor agent
 	supervisor, err := NewSupervisorAgent(model, config)
 	if err != nil {
 		log.Fatalf("Failed to create supervisor agent: %v", err)
 	}
 	defer supervisor.Stop()
-	
+
 	// Get research topic from command line or use default
 	topic := "quantum computing applications in drug discovery"
 	if len(os.Args) > 1 {
 		topic = strings.Join(os.Args[1:], " ")
 	}
-	
+
 	// Define research requirements
 	requirements := map[string]interface{}{
-		"depth":           "comprehensive",
-		"focus_areas":     []string{"current applications", "future potential", "challenges"},
-		"source_types":    []string{"academic", "industry", "news"},
-		"time_horizon":    "2020-2025",
-		"quality_level":   "high",
+		"depth":         "comprehensive",
+		"focus_areas":   []string{"current applications", "future potential", "challenges"},
+		"source_types":  []string{"academic", "industry", "news"},
+		"time_horizon":  "2020-2025",
+		"quality_level": "high",
 	}
-	
-	fmt.Printf("\n🔬 Research Topic: %s\n", topic)
-	fmt.Printf("📋 Requirements: %v\n", requirements)
-	fmt.Printf("⚙️  Configuration: Max Workers: %d, Quality Threshold: %.1f%%\n", 
-		config.MaxWorkers, config.QualityThreshold*100)
-	fmt.Printf("🚀 Starting advanced research project...\n\n")
-	
+
+	fmt.Printf("\nResearching: %s\n", topic)
+	fmt.Println("Starting research project...")
+
 	// Execute research project
 	startTime := time.Now()
 	report, err := supervisor.ExecuteResearchProject(topic, requirements)
@@ -1887,26 +1875,12 @@ func main() {
 		log.Fatalf("Research project failed: %v", err)
 	}
 	duration := time.Since(startTime)
-	
+
 	// Update report metadata
 	report.Metadata.StartTime = startTime
 	report.Metadata.EndTime = time.Now()
 	report.Metadata.Duration = duration
-	
+
 	// Display results
 	PrintAdvancedReport(report)
-	
-	// Print system metrics
-	supervisor.metrics.mutex.RLock()
-	fmt.Printf("\n📈 SYSTEM PERFORMANCE METRICS\n")
-	fmt.Printf("Active Workers: %d\n", supervisor.metrics.ActiveWorkers)
-	fmt.Printf("Completed Tasks: %d\n", supervisor.metrics.CompletedTasks)
-	fmt.Printf("Failed Tasks: %d\n", supervisor.metrics.FailedTasks)
-	fmt.Printf("System Throughput: %.1f%%\n", supervisor.metrics.SystemThroughput*100)
-	supervisor.metrics.mutex.RUnlock()
-	
-	fmt.Printf("\n✅ Advanced research project completed successfully!\n")
-	fmt.Printf("📊 Total duration: %v\n", duration)
-	fmt.Printf("🎯 Final confidence: %.1f%%\n", report.Confidence*100)
-	fmt.Printf("⭐ Overall quality: %.1f%%\n", report.QualityMetrics.OverallQuality*100)
 }

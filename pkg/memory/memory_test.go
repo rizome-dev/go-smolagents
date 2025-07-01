@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
 )
 
 func TestNewMessage(t *testing.T) {

@@ -3,7 +3,7 @@ package agents
 import (
 	"testing"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
 )
 
 func TestNewToolCallingAgent(t *testing.T) {

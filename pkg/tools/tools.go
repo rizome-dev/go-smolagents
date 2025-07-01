@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/agent_types"
-	"github.com/rizome-dev/smolagentsgo/pkg/utils"
+	"github.com/rizome-dev/go-smolagents/pkg/agent_types"
+	"github.com/rizome-dev/go-smolagents/pkg/utils"
 )
 
 // AuthorizedTypes lists all valid input/output types for tools

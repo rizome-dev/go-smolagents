@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
 )
 
 // GoExecutor implements code execution for Go code snippets

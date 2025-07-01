@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/default_tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/memory"
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/utils"
+	"github.com/rizome-dev/go-smolagents/pkg/default_tools"
+	"github.com/rizome-dev/go-smolagents/pkg/memory"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/utils"
 )
 
 // Default system prompt for CodeAgent

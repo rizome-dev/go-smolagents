@@ -14,10 +14,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/agents"
-	"github.com/rizome-dev/smolagentsgo/pkg/default_tools"
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/tools"
+	"github.com/rizome-dev/go-smolagents/pkg/agents"
+	"github.com/rizome-dev/go-smolagents/pkg/default_tools"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/tools"
 )
 
 var (
@@ -223,12 +223,12 @@ type SupervisorConfig struct {
 
 // WorkerManager handles dynamic worker lifecycle management
 type WorkerManager struct {
-	workers        map[string]*ResearchWorker
-	workerPool     chan *ResearchWorker
-	model          models.Model
-	mutex          sync.RWMutex
-	activeWorkers  int64
-	totalCreated   int64
+	workers       map[string]*ResearchWorker
+	workerPool    chan *ResearchWorker
+	model         models.Model
+	mutex         sync.RWMutex
+	activeWorkers int64
+	totalCreated  int64
 
 	// Health monitoring
 	heartbeats   map[string]time.Time
@@ -238,11 +238,11 @@ type WorkerManager struct {
 
 // ResearchWorker represents a specialized research agent
 type ResearchWorker struct {
-	ID              string
-	Type            WorkerType
-	agent           agents.MultiStepAgent
-	specialization  string
-	tools           []tools.Tool
+	ID             string
+	Type           WorkerType
+	agent          agents.MultiStepAgent
+	specialization string
+	tools          []tools.Tool
 
 	// State
 	isActive      int64 // atomic
@@ -736,13 +736,13 @@ func NewResearchWorker(id string, model models.Model, manager *ResearchManager) 
 	}
 
 	worker := &ResearchWorker{
-		ID:            id,
-		Type:          WorkerTypeGeneral,
-		agent:         agent,
+		ID:             id,
+		Type:           WorkerTypeGeneral,
+		agent:          agent,
 		specialization: "general",
-		lastHeartbeat: time.Now(),
-		ctx:           ctx,
-		cancel:        cancel,
+		lastHeartbeat:  time.Now(),
+		ctx:            ctx,
+		cancel:         cancel,
 	}
 
 	// Start the worker
@@ -1159,11 +1159,11 @@ func runAdvancedResearch(cmd *cobra.Command, args []string) error {
 
 	// Define research requirements
 	requirements := map[string]interface{}{
-		"depth":           "comprehensive",
-		"focus_areas":     []string{"current state", "recent developments", "applications", "challenges", "future trends"},
-		"source_types":    []string{"academic", "industry", "news", "technical"},
-		"time_horizon":    "2020-2025",
-		"quality_level":   "high",
+		"depth":         "comprehensive",
+		"focus_areas":   []string{"current state", "recent developments", "applications", "challenges", "future trends"},
+		"source_types":  []string{"academic", "industry", "news", "technical"},
+		"time_horizon":  "2020-2025",
+		"quality_level": "high",
 	}
 
 	fmt.Printf("🚀 Advanced Research Configuration:\n")
@@ -1695,11 +1695,11 @@ func (s *SupervisorAgent) ExecuteResearchProject(topic string, requirements map[
 
 // PlanningResult represents the output of the planning phase
 type PlanningResult struct {
-	Tasks           []*Task                `json:"tasks"`
-	RequiredWorkers map[WorkerType]int     `json:"required_workers"`
-	Strategy        string                 `json:"strategy"`
-	Timeline        map[string]time.Time   `json:"timeline"`
-	Dependencies    map[string][]string    `json:"dependencies"`
+	Tasks           []*Task              `json:"tasks"`
+	RequiredWorkers map[WorkerType]int   `json:"required_workers"`
+	Strategy        string               `json:"strategy"`
+	Timeline        map[string]time.Time `json:"timeline"`
+	Dependencies    map[string][]string  `json:"dependencies"`
 }
 
 // planResearchProject creates an intelligent research plan
@@ -1756,63 +1756,63 @@ Provide a detailed research strategy using the final_answer tool.`, topic, requi
 func (s *SupervisorAgent) parseIntelligentPlan(planContent, topic string) []*Task {
 	tasks := []*Task{
 		{
-			ID:       "initial-research-1",
-			Type:     TaskTypeInitialResearch,
-			Query:    fmt.Sprintf("Comprehensive overview and current state of %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "initial", "focus": "overview"},
-			CreatedAt: time.Now(),
+			ID:         "initial-research-1",
+			Type:       TaskTypeInitialResearch,
+			Query:      fmt.Sprintf("Comprehensive overview and current state of %s", topic),
+			Priority:   PriorityHigh,
+			Context:    map[string]string{"phase": "initial", "focus": "overview"},
+			CreatedAt:  time.Now(),
 			MaxRetries: 2,
 		},
 		{
-			ID:       "deep-dive-1",
-			Type:     TaskTypeDeepDive,
-			Query:    fmt.Sprintf("Historical development and key milestones in %s", topic),
-			Priority: PriorityMedium,
-			Context:  map[string]string{"phase": "deep_dive", "focus": "history"},
+			ID:           "deep-dive-1",
+			Type:         TaskTypeDeepDive,
+			Query:        fmt.Sprintf("Historical development and key milestones in %s", topic),
+			Priority:     PriorityMedium,
+			Context:      map[string]string{"phase": "deep_dive", "focus": "history"},
 			Dependencies: []string{"initial-research-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "deep-dive-2",
-			Type:     TaskTypeDeepDive,
-			Query:    fmt.Sprintf("Current trends and recent developments in %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "deep_dive", "focus": "current"},
+			ID:           "deep-dive-2",
+			Type:         TaskTypeDeepDive,
+			Query:        fmt.Sprintf("Current trends and recent developments in %s", topic),
+			Priority:     PriorityHigh,
+			Context:      map[string]string{"phase": "deep_dive", "focus": "current"},
 			Dependencies: []string{"initial-research-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "fact-check-1",
-			Type:     TaskTypeFactCheck,
-			Query:    fmt.Sprintf("Verify key claims and statistics about %s", topic),
-			Priority: PriorityHigh,
-			Context:  map[string]string{"phase": "validation", "focus": "facts"},
+			ID:           "fact-check-1",
+			Type:         TaskTypeFactCheck,
+			Query:        fmt.Sprintf("Verify key claims and statistics about %s", topic),
+			Priority:     PriorityHigh,
+			Context:      map[string]string{"phase": "validation", "focus": "facts"},
 			Dependencies: []string{"deep-dive-1", "deep-dive-2"},
-			CreatedAt: time.Now(),
-			MaxRetries: 3,
+			CreatedAt:    time.Now(),
+			MaxRetries:   3,
 		},
 		{
-			ID:       "synthesis-1",
-			Type:     TaskTypeSynthesis,
-			Query:    fmt.Sprintf("Synthesize comprehensive understanding of %s with multiple perspectives", topic),
-			Priority: PriorityCritical,
-			Context:  map[string]string{"phase": "synthesis", "focus": "comprehensive"},
+			ID:           "synthesis-1",
+			Type:         TaskTypeSynthesis,
+			Query:        fmt.Sprintf("Synthesize comprehensive understanding of %s with multiple perspectives", topic),
+			Priority:     PriorityCritical,
+			Context:      map[string]string{"phase": "synthesis", "focus": "comprehensive"},
 			Dependencies: []string{"fact-check-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 2,
+			CreatedAt:    time.Now(),
+			MaxRetries:   2,
 		},
 		{
-			ID:       "quality-check-1",
-			Type:     TaskTypeQualityCheck,
-			Query:    fmt.Sprintf("Quality assessment and final validation of %s research", topic),
-			Priority: PriorityCritical,
-			Context:  map[string]string{"phase": "validation", "focus": "quality"},
+			ID:           "quality-check-1",
+			Type:         TaskTypeQualityCheck,
+			Query:        fmt.Sprintf("Quality assessment and final validation of %s research", topic),
+			Priority:     PriorityCritical,
+			Context:      map[string]string{"phase": "validation", "focus": "quality"},
 			Dependencies: []string{"synthesis-1"},
-			CreatedAt: time.Now(),
-			MaxRetries: 1,
+			CreatedAt:    time.Now(),
+			MaxRetries:   1,
 		},
 	}
 
@@ -1853,30 +1853,30 @@ func (s *SupervisorAgent) determineSpecialization(workerType WorkerType, index i
 func (s *SupervisorAgent) executeTasksWithMonitoring(tasks []*Task) (map[string]*Result, error) {
 	results := make(map[string]*Result)
 	resultsMutex := sync.RWMutex{}
-	
+
 	log.Printf("Executing %d research tasks with real agents", len(tasks))
-	
+
 	// Execute tasks sequentially for CLI integration (respecting dependencies)
 	for _, task := range tasks {
 		log.Printf("Executing task %s: %s", task.ID, task.Query)
-		
+
 		// Find best worker for this task type
 		worker := s.findBestWorkerForTask(task)
 		if worker == nil {
 			log.Printf("No suitable worker found for task %s", task.ID)
 			continue
 		}
-		
+
 		// Execute task with the selected worker
 		result := s.executeTaskWithWorker(task, worker)
-		
+
 		resultsMutex.Lock()
 		results[task.ID] = result
 		resultsMutex.Unlock()
-		
+
 		log.Printf("Completed task %s with quality score %.2f", task.ID, result.QualityScore)
 	}
-	
+
 	return results, nil
 }
 
@@ -1884,7 +1884,7 @@ func (s *SupervisorAgent) executeTasksWithMonitoring(tasks []*Task) (map[string]
 func (s *SupervisorAgent) findBestWorkerForTask(task *Task) *ResearchWorker {
 	s.workerManager.mutex.RLock()
 	defer s.workerManager.mutex.RUnlock()
-	
+
 	// Select worker based on task type
 	var preferredType WorkerType
 	switch task.Type {
@@ -1901,29 +1901,29 @@ func (s *SupervisorAgent) findBestWorkerForTask(task *Task) *ResearchWorker {
 	default:
 		preferredType = WorkerTypeGeneral
 	}
-	
+
 	// Find worker of preferred type
 	for _, worker := range s.workerManager.workers {
 		if worker.Type == preferredType {
 			return worker
 		}
 	}
-	
+
 	// Fallback to any available worker
 	for _, worker := range s.workerManager.workers {
 		return worker // Return first available worker
 	}
-	
+
 	return nil
 }
 
 // executeTaskWithWorker executes a task using a specific worker's agent
 func (s *SupervisorAgent) executeTaskWithWorker(task *Task, worker *ResearchWorker) *Result {
 	startTime := time.Now()
-	
+
 	// Create specialized prompt based on task type and context
 	prompt := s.createTaskPrompt(task, worker)
-	
+
 	// Execute with the worker's agent (note: we'll use supervisor's agent for now since workers don't have real agents in simplified version)
 	maxSteps := 10
 	agentResult, err := s.agent.Run(&agents.RunOptions{
@@ -1931,9 +1931,9 @@ func (s *SupervisorAgent) executeTaskWithWorker(task *Task, worker *ResearchWork
 		MaxSteps: &maxSteps,
 		Context:  s.ctx,
 	})
-	
+
 	duration := time.Since(startTime)
-	
+
 	result := &Result{
 		TaskID:    task.ID,
 		WorkerID:  worker.ID,
@@ -1944,7 +1944,7 @@ func (s *SupervisorAgent) executeTaskWithWorker(task *Task, worker *ResearchWork
 			Duration:  duration,
 		},
 	}
-	
+
 	if err != nil {
 		log.Printf("Task %s failed: %v", task.ID, err)
 		result.Error = err
@@ -1957,10 +1957,10 @@ func (s *SupervisorAgent) executeTaskWithWorker(task *Task, worker *ResearchWork
 		result.Confidence = s.assessContentConfidence(content)
 		result.QualityScore = s.assessContentQuality(content)
 		result.Sources = s.extractSourcesFromContent(content)
-		
+
 		log.Printf("Task %s completed successfully, content length: %d", task.ID, len(content))
 	}
-	
+
 	return result
 }
 
@@ -2025,14 +2025,14 @@ Provide a quality assessment with specific feedback and recommendations.`
 	}
 
 	basePrompt += "\n\nIMPORTANT: Use the final_answer tool to provide your complete research findings and analysis."
-	
+
 	return basePrompt
 }
 
 // Helper functions for content assessment
 func (s *SupervisorAgent) assessContentConfidence(content string) float64 {
 	confidence := 0.5
-	
+
 	// Basic heuristics for confidence assessment
 	wordCount := len(strings.Fields(content))
 	if wordCount > 200 {
@@ -2041,7 +2041,7 @@ func (s *SupervisorAgent) assessContentConfidence(content string) float64 {
 	if wordCount > 500 {
 		confidence += 0.1
 	}
-	
+
 	// Check for specific indicators
 	if strings.Contains(content, "research") || strings.Contains(content, "study") {
 		confidence += 0.1
@@ -2049,48 +2049,48 @@ func (s *SupervisorAgent) assessContentConfidence(content string) float64 {
 	if strings.Contains(content, "data") || strings.Contains(content, "findings") {
 		confidence += 0.1
 	}
-	
+
 	if confidence > 1.0 {
 		confidence = 1.0
 	}
-	
+
 	return confidence
 }
 
 func (s *SupervisorAgent) assessContentQuality(content string) float64 {
 	quality := 0.5
-	
+
 	// Basic heuristics for quality assessment
 	wordCount := len(strings.Fields(content))
 	if wordCount > 300 {
 		quality += 0.1
 	}
-	
+
 	// Check for structure indicators
 	if strings.Contains(content, "\n") {
 		quality += 0.1
 	}
-	
+
 	// Check for specificity
 	if strings.Contains(content, "2024") || strings.Contains(content, "2025") {
 		quality += 0.1
 	}
-	
+
 	// Check for detailed information
 	if strings.Contains(content, "applications") || strings.Contains(content, "challenges") {
 		quality += 0.1
 	}
-	
+
 	if quality > 1.0 {
 		quality = 1.0
 	}
-	
+
 	return quality
 }
 
 func (s *SupervisorAgent) extractSourcesFromContent(content string) []Source {
 	sources := []Source{}
-	
+
 	// Simple source extraction - in practice this would be more sophisticated
 	if len(content) > 100 {
 		sources = append(sources, Source{
@@ -2101,7 +2101,7 @@ func (s *SupervisorAgent) extractSourcesFromContent(content string) []Source {
 			AccessedAt:  time.Now(),
 		})
 	}
-	
+
 	return sources
 }
 
@@ -2170,10 +2170,10 @@ Use the final_answer tool with the complete report.`,
 
 	// Create final report
 	report := &AdvancedProjectReport{
-		Topic:           topic,
+		Topic:            topic,
 		ExecutiveSummary: fmt.Sprintf("%v", synthesisResult.Output),
-		Findings:        s.extractFindings(allContent),
-		Methodology:     "Advanced multi-agent research with quality validation and synthesis",
+		Findings:         s.extractFindings(allContent),
+		Methodology:      "Advanced multi-agent research with quality validation and synthesis",
 		QualityMetrics: QualityAssessment{
 			OverallQuality:  s.calculateOverallQuality(results),
 			FactualAccuracy: 0.85,
@@ -2182,9 +2182,9 @@ Use the final_answer tool with the complete report.`,
 			Consistency:     0.85,
 			AssessmentDate:  time.Now(),
 		},
-		Sources:        s.deduplicateSources(allSources),
-		Confidence:     avgConfidence,
-		Limitations:    s.identifyLimitations(results),
+		Sources:         s.deduplicateSources(allSources),
+		Confidence:      avgConfidence,
+		Limitations:     s.identifyLimitations(results),
 		Recommendations: s.generateRecommendations(topic, results),
 		Metadata: ProjectMetadata{
 			StartTime:     time.Now().Add(-30 * time.Minute), // Approximate
@@ -2327,7 +2327,7 @@ func (s *SupervisorAgent) collectMetrics() {
 // CreateWorker creates a new specialized research worker (simplified)
 func (wm *WorkerManager) CreateWorker(workerType WorkerType, specialization string) (*ResearchWorker, error) {
 	workerID := fmt.Sprintf("%s-%d", workerType, atomic.AddInt64(&wm.totalCreated, 1))
-	
+
 	// Create simplified worker for CLI integration
 	worker := &ResearchWorker{
 		ID:             workerID,
@@ -2335,13 +2335,13 @@ func (wm *WorkerManager) CreateWorker(workerType WorkerType, specialization stri
 		specialization: specialization,
 		lastHeartbeat:  time.Now(),
 	}
-	
+
 	wm.mutex.Lock()
 	wm.workers[workerID] = worker
 	wm.mutex.Unlock()
-	
+
 	atomic.AddInt64(&wm.activeWorkers, 1)
-	
+
 	log.Printf("Created %s worker %s with specialization: %s", workerType, workerID, specialization)
 	return worker, nil
 }

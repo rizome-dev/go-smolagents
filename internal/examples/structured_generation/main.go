@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
 )
 
 // Task represents a structured task format

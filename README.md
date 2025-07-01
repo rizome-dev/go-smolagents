@@ -1,21 +1,35 @@
-# smolagentsgo
+# go-smolagents
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/rizome-dev/smolagentsgo)](https://pkg.go.dev/github.com/rizome-dev/smolagentsgo)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rizome-dev/smolagentsgo)](https://goreportcard.com/report/github.com/rizome-dev/smolagentsgo)
+[![GoDoc](https://pkg.go.dev/badge/github.com/rizome-dev/go-smolagents)](https://pkg.go.dev/github.com/rizome-dev/go-smolagents)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rizome-dev/go-smolagents)](https://goreportcard.com/report/github.com/rizome-dev/go-smolagents)
 
 ```shell
-go get github.com/rizome-dev/smolagentsgo
+go get github.com/rizome-dev/go-smolagents
 ```
 
 built by: [rizome labs](https://rizome.dev)
 
 contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
-**warning**: this project is an internal WIP library in use by Rizome Labs, and should not, until v1, be used, in full, in prod environments. we will keep this repo updated until that time to describe the ongoing development.
+**warning**: this project is an internal WIP library in use by Rizome Labs. things might break in production environments, so test carefully.
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### From Source
+
+```bash
+git clone https://github.com/rizome-dev/go-smolagents
+cd go-smolagents
+go mod download
+
+# Build CLI tool
+go build -o bin/smolagents-cli ./cmd/smolagents-cli
+
+# Interactive mode
+./bin/smolagents-cli --help
+```
+
+### Environment Variables
 ```bash
 # Required: At least one model API key
 export OPENAI_API_KEY="sk-..."              # Recommended
@@ -25,42 +39,6 @@ export HF_API_TOKEN="hf_..."                # HuggingFace alternative
 # Optional: Enhanced search capabilities
 export SERP_API_KEY="..."                   # Google search via SerpAPI
 export SERPER_API_KEY="..."                # Alternative Google search
-```
-
-### Installation
-```bash
-git clone https://github.com/rizome-dev/smolagentsgo
-cd smolagentsgo
-go mod download
-```
-
-### Build & Run
-```bash
-# Build CLI tool
-go build -o bin/smolagents-cli ./cmd/smolagents-cli
-
-# Quick test
-./bin/smolagents-cli run "What are the latest developments in quantum computing?"
-
-# Interactive mode
-./bin/smolagents-cli run --interactive
-```
-
-## 📁 Project Structure
-
-```
-smolagentsgo/
-├── cmd/smolagents-cli/          # Interactive CLI with TUI
-├── pkg/smolagents/              # Public library API
-│   ├── agents/                  # Agent implementations
-│   ├── models/                  # LLM integrations
-│   ├── tools/                   # Tool ecosystem
-│   ├── memory/                  # Conversation memory
-│   ├── executors/               # Code execution
-│   └── default_tools/           # Built-in tools
-├── internal/examples/           # Advanced examples
-│   └── research_agent/          # Multi-agent research system
-└── bin/                         # Compiled binaries
 ```
 
 ## 🛠️ CLI Usage
@@ -112,9 +90,9 @@ smolagentsgo/
 package main
 
 import (
-    "github.com/rizome-dev/smolagentsgo/pkg/agents"
-    "github.com/rizome-dev/smolagentsgo/pkg/models"
-    "github.com/rizome-dev/smolagentsgo/pkg/default_tools"
+    "github.com/rizome-dev/go-smolagents/pkg/agents"
+    "github.com/rizome-dev/go-smolagents/pkg/models"
+    "github.com/rizome-dev/go-smolagents/pkg/default_tools"
 )
 
 func main() {
@@ -267,14 +245,6 @@ go test ./pkg/smolagents/models
 # Run examples
 cd internal/examples/research_agent && go run main.go "test topic"
 ```
-
-## ⚡ Performance
-
-- **Single Agent**: 30-60s for complex tasks
-- **Multi-Agent**: 3x speedup with parallel execution  
-- **Research Quality**: 85-95% confidence on most topics
-- **Memory Usage**: <100MB per agent instance
-- **Concurrent**: Safe goroutine-based parallelism
 
 ## 🔧 Configuration
 

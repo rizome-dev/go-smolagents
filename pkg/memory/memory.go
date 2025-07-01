@@ -12,8 +12,8 @@ import (
 	"image"
 	"time"
 
-	"github.com/rizome-dev/smolagentsgo/pkg/models"
-	"github.com/rizome-dev/smolagentsgo/pkg/monitoring"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
+	"github.com/rizome-dev/go-smolagents/pkg/monitoring"
 )
 
 // Message represents a single message in the conversation
