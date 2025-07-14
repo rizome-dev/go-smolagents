@@ -1,6 +1,7 @@
 package executors
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -62,6 +63,14 @@ func TestGoExecutorSimpleCode(t *testing.T) {
 	output, err := executor.Execute(code, []string{"fmt"})
 	if err != nil {
 		t.Errorf("Failed to execute simple code: %v", err)
+	}
+
+	// Get the raw result for debugging
+	result, execErr := executor.ExecuteWithResult(code)
+	if execErr != nil {
+		t.Errorf("ExecuteWithResult failed: %v", execErr)
+	} else {
+		t.Logf("Raw result: %+v", result)
 	}
 
 	if output == nil {
@@ -158,5 +167,200 @@ func TestGoExecutorTimeout(t *testing.T) {
 	_, err = executor.Execute(longRunningCode, []string{})
 	if err == nil {
 		t.Error("Expected timeout error")
+	}
+}
+
+func TestGoExecutorFinalAnswer(t *testing.T) {
+	executor, err := NewGoExecutor()
+	if err != nil {
+		t.Fatalf("Failed to create GoExecutor: %v", err)
+	}
+	defer executor.Close()
+
+	t.Run("final_answer detection", func(t *testing.T) {
+		code := `final_answer("The answer is 42")`
+		result, err := executor.ExecuteWithResult(code)
+		if err != nil {
+			t.Errorf("Execution failed: %v", err)
+		}
+		if !result.IsFinalAnswer {
+			t.Error("Expected IsFinalAnswer to be true")
+		}
+		if result.FinalAnswer != "The answer is 42" {
+			t.Errorf("Expected final answer 'The answer is 42', got %v", result.FinalAnswer)
+		}
+	})
+
+	t.Run("regular execution without final_answer", func(t *testing.T) {
+		code := `result = "regular output"`
+		result, err := executor.ExecuteWithResult(code)
+		if err != nil {
+			t.Errorf("Execution failed: %v", err)
+		}
+		if result.IsFinalAnswer {
+			t.Error("Expected IsFinalAnswer to be false")
+		}
+		if result.Output != "regular output" {
+			t.Errorf("Expected output 'regular output', got %v", result.Output)
+		}
+	})
+
+	t.Run("final_answer with computation", func(t *testing.T) {
+		code := `
+		sum := 0
+		for i := 1; i <= 10; i++ {
+			sum += i
+		}
+		final_answer(fmt.Sprintf("The sum of 1 to 10 is %d", sum))
+		`
+		result, err := executor.ExecuteWithResult(code)
+		if err != nil {
+			t.Errorf("Execution failed: %v", err)
+		}
+		if !result.IsFinalAnswer {
+			t.Error("Expected IsFinalAnswer to be true")
+		}
+		expectedAnswer := "The sum of 1 to 10 is 55"
+		if result.FinalAnswer != expectedAnswer {
+			t.Errorf("Expected final answer '%s', got %v", expectedAnswer, result.FinalAnswer)
+		}
+	})
+}
+
+func TestGoExecutorExecuteWithResult(t *testing.T) {
+	// Create executor with strings package authorized
+	options := map[string]interface{}{
+		"authorized_packages": append(DefaultAuthorizedPackages(), "strings"),
+	}
+	executor, err := NewGoExecutor(options)
+	if err != nil {
+		t.Fatalf("Failed to create GoExecutor: %v", err)
+	}
+	defer executor.Close()
+
+	t.Run("simple computation", func(t *testing.T) {
+		code := `result = 10 * 5`
+		result, err := executor.ExecuteWithResult(code)
+		if err != nil {
+			t.Errorf("Execution failed: %v", err)
+		}
+		if result.Output != float64(50) {
+			t.Errorf("Expected output 50, got %v", result.Output)
+		}
+		if result.IsFinalAnswer {
+			t.Error("Expected IsFinalAnswer to be false for regular execution")
+		}
+	})
+
+	t.Run("string manipulation", func(t *testing.T) {
+		// Since we're not using the Python-style imports, let's skip this test
+		t.Skip("String manipulation requires import handling not yet implemented")
+	})
+
+	t.Run("error handling", func(t *testing.T) {
+		code := `
+		// This should cause an error
+		result = 1 / 0
+		`
+		result, err := executor.ExecuteWithResult(code)
+		if err == nil {
+			t.Error("Expected error for division by zero")
+		}
+		if result != nil && result.Stderr == "" {
+			t.Error("Expected stderr output for error")
+		}
+	})
+
+	t.Run("variable state preservation", func(t *testing.T) {
+		// Variable persistence between executions is not yet implemented
+		t.Skip("Variable state preservation not yet implemented")
+	})
+}
+
+func TestGoExecutorSyntaxErrors(t *testing.T) {
+	executor, err := NewGoExecutor()
+	if err != nil {
+		t.Fatalf("Failed to create GoExecutor: %v", err)
+	}
+	defer executor.Close()
+
+	testCases := []struct {
+		name          string
+		code          string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:          "incomplete expression",
+			code:          `result = 1 +`,
+			expectError:   true,
+			errorContains: "syntax error",
+		},
+		{
+			name:          "undefined variable",
+			code:          `result = undefined_var`,
+			expectError:   true,
+			errorContains: "undefined",
+		},
+		{
+			name:          "invalid syntax",
+			code:          `if true { result = "missing closing brace"`,
+			expectError:   true,
+			errorContains: "syntax error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := executor.ExecuteWithResult(tc.code)
+			if tc.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if !strings.Contains(err.Error(), tc.errorContains) {
+					t.Errorf("Expected error containing '%s', got: %v", tc.errorContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+			_ = result // Suppress unused variable warning
+		})
+	}
+}
+
+func TestGoExecutorSecurityRestrictions(t *testing.T) {
+	executor, err := NewGoExecutor()
+	if err != nil {
+		t.Fatalf("Failed to create GoExecutor: %v", err)
+	}
+	defer executor.Close()
+
+	testCases := []struct {
+		name          string
+		code          string
+		errorContains string
+	}{
+		{
+			name:          "os.Exit usage",
+			code:          `os.Exit(0)`,
+			errorContains: "unsafe operation",
+		},
+		{
+			name:          "panic usage",
+			code:          `panic("test panic")`,
+			errorContains: "unsafe operation",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := executor.ExecuteWithResult(tc.code)
+			if err == nil {
+				t.Error("Expected security error but got none")
+			} else if !strings.Contains(err.Error(), tc.errorContains) {
+				t.Errorf("Expected error containing '%s', got: %v", tc.errorContains, err)
+			}
+		})
 	}
 }

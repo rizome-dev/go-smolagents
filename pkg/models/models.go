@@ -677,6 +677,40 @@ func RemoveStopSequences(content string, stopSequences []string) string {
 	return content
 }
 
+// extractMessageContent extracts text content from a message map
+func extractMessageContent(msg map[string]interface{}) string {
+	// First try direct string (for backward compatibility)
+	if content, ok := msg["content"].(string); ok {
+		return content
+	}
+	
+	// Handle array of content items
+	if contentArray, ok := msg["content"].([]map[string]interface{}); ok {
+		var textParts []string
+		for _, item := range contentArray {
+			if text, ok := item["text"].(string); ok {
+				textParts = append(textParts, text)
+			}
+		}
+		return strings.Join(textParts, " ")
+	}
+	
+	// Handle array of interface{}
+	if contentArray, ok := msg["content"].([]interface{}); ok {
+		var textParts []string
+		for _, item := range contentArray {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if text, ok := itemMap["text"].(string); ok {
+					textParts = append(textParts, text)
+				}
+			}
+		}
+		return strings.Join(textParts, " ")
+	}
+	
+	return ""
+}
+
 // GetCleanMessageList preprocesses messages for model consumption
 func GetCleanMessageList(
 	messages []interface{},
@@ -709,10 +743,17 @@ func GetCleanMessageList(
 
 		// Merge consecutive messages with the same role
 		if len(result) > 0 && result[len(result)-1]["role"] == msgMap["role"] {
-			// Merge content
-			lastContent, _ := result[len(result)-1]["content"].(string)
-			currentContent, _ := msgMap["content"].(string)
-			result[len(result)-1]["content"] = lastContent + "\n" + currentContent
+			// Merge content - need to handle both string and array formats
+			lastMsg := result[len(result)-1]
+			lastContent := extractMessageContent(lastMsg)
+			currentContent := extractMessageContent(msgMap)
+			
+			if lastContent != "" && currentContent != "" {
+				// Create a new text content item with merged text
+				result[len(result)-1]["content"] = []map[string]interface{}{
+					{"type": "text", "text": lastContent + "\n" + currentContent},
+				}
+			}
 		} else {
 			result = append(result, msgMap)
 		}

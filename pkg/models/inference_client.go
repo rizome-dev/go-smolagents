@@ -7,19 +7,45 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/rizome-dev/go-smolagents/pkg/monitoring"
 )
 
-// Helper function for debugging
-func getKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
+// extractTextContent extracts text content from a message regardless of format
+func extractTextContent(msg map[string]interface{}) string {
+	// First try direct string (for backward compatibility)
+	if content, ok := msg["content"].(string); ok {
+		return content
 	}
-	return keys
+	
+	// Handle array of content items (new format)
+	if contentArray, ok := msg["content"].([]map[string]interface{}); ok {
+		var textParts []string
+		for _, item := range contentArray {
+			if text, ok := item["text"].(string); ok {
+				textParts = append(textParts, text)
+			}
+		}
+		return strings.Join(textParts, " ")
+	}
+	
+	// Handle array of interface{} (in case of type variations)
+	if contentArray, ok := msg["content"].([]interface{}); ok {
+		var textParts []string
+		for _, item := range contentArray {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if text, ok := itemMap["text"].(string); ok {
+					textParts = append(textParts, text)
+				}
+			}
+		}
+		return strings.Join(textParts, " ")
+	}
+	
+	return ""
 }
 
 // InferenceClientModel represents a model using Hugging Face Inference API
@@ -34,6 +60,13 @@ type InferenceClientModel struct {
 
 // NewInferenceClientModel creates a new inference client model
 func NewInferenceClientModel(modelID string, token string, options map[string]interface{}) *InferenceClientModel {
+	if token == "" {
+		// Try to get token from environment if not provided
+		token = os.Getenv("HF_TOKEN")
+		if token == "" {
+			fmt.Println("Warning: No HuggingFace token provided. API calls may fail.")
+		}
+	}
 	base := NewBaseModel(modelID, options)
 
 	model := &InferenceClientModel{
@@ -54,9 +87,9 @@ func NewInferenceClientModel(modelID string, token string, options map[string]in
 		}
 	}
 
-	// Set default base URL if not provided
+	// Set default base URL if not provided - use new Inference Providers endpoint
 	if model.BaseURL == "" {
-		model.BaseURL = "https://api-inference.huggingface.co"
+		model.BaseURL = "https://router.huggingface.co/v1/chat/completions"
 	}
 
 	return model
@@ -67,7 +100,7 @@ func (icm *InferenceClientModel) Generate(messages []interface{}, options *Gener
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, icm.FlattenMessagesAsText)
 	if err != nil {
-		return nil, fmt.Errorf("failed to clean messages: %w", err)
+		return nil, fmt.Errorf("[Model: %s] failed to clean messages: %w", icm.ModelID, err)
 	}
 
 	// Prepare completion parameters
@@ -97,27 +130,31 @@ func (icm *InferenceClientModel) Generate(messages []interface{}, options *Gener
 
 	kwargs := icm.PrepareCompletionKwargs(options, defaultParams, priorityParams)
 
-	// Make the API call (placeholder implementation)
+	// Make the API call
 	result, err := icm.callAPI(kwargs)
 	if err != nil {
-		return nil, fmt.Errorf("API call failed: %w", err)
+		return nil, err // Error already has detailed info from callAPI
 	}
 
 	// Parse the response
-	return icm.parseResponse(result)
+	parsed, err := icm.parseResponse(result)
+	if err != nil {
+		return nil, fmt.Errorf("[Model: %s, Provider: %s, BaseURL: %s] failed to parse response: %w", icm.ModelID, icm.Provider, icm.BaseURL, err)
+	}
+	return parsed, nil
 }
 
 // GenerateStream implements Model interface
 func (icm *InferenceClientModel) GenerateStream(messages []interface{}, options *GenerateOptions) (<-chan *ChatMessageStreamDelta, error) {
 	// Check if streaming is supported
 	if !icm.SupportsStreaming() {
-		return nil, fmt.Errorf("streaming not supported for this model")
+		return nil, fmt.Errorf("[Model: %s] streaming not supported for this model", icm.ModelID)
 	}
 
 	// Convert messages to the required format
 	cleanMessages, err := GetCleanMessageList(messages, ToolRoleConversions, false, icm.FlattenMessagesAsText)
 	if err != nil {
-		return nil, fmt.Errorf("failed to clean messages: %w", err)
+		return nil, fmt.Errorf("[Model: %s] failed to clean messages: %w", icm.ModelID, err)
 	}
 
 	// Prepare completion parameters
@@ -175,10 +212,20 @@ func (icm *InferenceClientModel) supportsStructuredGeneration() bool {
 
 // callAPI makes the actual API call to HuggingFace Inference API
 func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[string]interface{}, error) {
-	// Check if we're using the new chat completions endpoint
-	if strings.Contains(icm.BaseURL, "chat/completions") || strings.Contains(icm.BaseURL, "v1/") {
-		return icm.callOpenAICompatibleAPI(kwargs)
+	// Debug logging
+	if os.Getenv("SMOLAGENTS_DEBUG") == "true" {
+		fmt.Printf("[DEBUG] Model callAPI - Model: %s, Provider: %s, BaseURL: %s\n", icm.ModelID, icm.Provider, icm.BaseURL)
+		if messages, ok := kwargs["messages"].([]map[string]interface{}); ok {
+			fmt.Printf("[DEBUG] Number of messages: %d\n", len(messages))
+		}
+		if stopSeqs, ok := kwargs["stop"]; ok {
+			fmt.Printf("[DEBUG] Stop sequences: %v\n", stopSeqs)
+		}
 	}
+
+	// Always use OpenAI-compatible API for new Inference Providers
+	// The old inference API is deprecated
+	return icm.callOpenAICompatibleAPI(kwargs)
 
 	// For standard HuggingFace Inference API, we need to format the request properly
 	messages, ok := kwargs["messages"].([]map[string]interface{})
@@ -193,8 +240,8 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 		if !ok {
 			continue
 		}
-		content, ok := msg["content"].(string)
-		if !ok {
+		content := extractTextContent(msg)
+		if content == "" {
 			continue
 		}
 
@@ -292,10 +339,10 @@ func (icm *InferenceClientModel) callAPI(kwargs map[string]interface{}) (map[str
 		var errorDetails map[string]interface{}
 		if json.Unmarshal(body, &errorDetails) == nil {
 			if errorMsg, ok := errorDetails["error"].(string); ok {
-				return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorMsg)
+				return nil, fmt.Errorf("[Model: %s, Provider: %s] API request failed with status %d: %s", icm.ModelID, icm.Provider, resp.StatusCode, errorMsg)
 			}
 		}
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("[Model: %s, Provider: %s] API request failed with status %d: %s", icm.ModelID, icm.Provider, resp.StatusCode, string(body))
 	}
 
 	// Parse JSON response - HF can return either object or array
@@ -316,6 +363,11 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
+	debugMode := os.Getenv("SMOLAGENTS_DEBUG") == "true"
+	if debugMode {
+		fmt.Printf("[DEBUG] Request payload size: %d bytes\n", len(jsonData))
+	}
+
 	req, err := http.NewRequest("POST", icm.BaseURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -324,6 +376,12 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", icm.Token))
+	
+	// Set provider header if specified
+	if icm.Provider != "" && icm.Provider != "auto" {
+		req.Header.Set("X-Provider", icm.Provider)
+	}
+	
 	for key, value := range icm.Headers {
 		req.Header.Set(key, value)
 	}
@@ -340,13 +398,48 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	if debugMode {
+		fmt.Printf("[DEBUG] Response status: %d, body size: %d bytes\n", resp.StatusCode, len(body))
+	}
+
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		if debugMode {
+			fmt.Printf("[DEBUG] Error response body: %s\n", string(body))
+		}
+		var errorDetails map[string]interface{}
+		if json.Unmarshal(body, &errorDetails) == nil {
+			if error, ok := errorDetails["error"].(map[string]interface{}); ok {
+				if msg, ok := error["message"].(string); ok {
+					return nil, fmt.Errorf("[Model: %s, Provider: %s, BaseURL: %s] API error (status %d): %s", icm.ModelID, icm.Provider, icm.BaseURL, resp.StatusCode, msg)
+				}
+			} else if errorMsg, ok := errorDetails["error"].(string); ok {
+				return nil, fmt.Errorf("[Model: %s, Provider: %s, BaseURL: %s] API error (status %d): %s", icm.ModelID, icm.Provider, icm.BaseURL, resp.StatusCode, errorMsg)
+			}
+		}
+		return nil, fmt.Errorf("[Model: %s, Provider: %s, BaseURL: %s] API request failed with status %d: %s", icm.ModelID, icm.Provider, icm.BaseURL, resp.StatusCode, string(body))
 	}
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
+		if debugMode {
+			fmt.Printf("[DEBUG] Failed to parse JSON response. Body: %s\n", string(body))
+		}
 		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if debugMode {
+		if choices, ok := result["choices"].([]interface{}); ok {
+			fmt.Printf("[DEBUG] Response has %d choices\n", len(choices))
+			if len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]interface{}); ok {
+					if msg, ok := choice["message"].(map[string]interface{}); ok {
+						if content, ok := msg["content"].(string); ok {
+							fmt.Printf("[DEBUG] Response content length: %d characters\n", len(content))
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return result, nil
@@ -363,11 +456,8 @@ func (icm *InferenceClientModel) callStreamingAPI(kwargs map[string]interface{},
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
-	url := fmt.Sprintf("%s/models/%s", icm.BaseURL, icm.ModelID)
-	if strings.Contains(icm.BaseURL, "chat/completions") {
-		url = icm.BaseURL
-	}
+	// Always use the base URL directly for the new Inference Providers API
+	url := icm.BaseURL
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -398,7 +488,7 @@ func (icm *InferenceClientModel) callStreamingAPI(kwargs map[string]interface{},
 	// Check for HTTP errors
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("[Model: %s, Provider: %s] API request failed with status %d: %s", icm.ModelID, icm.Provider, resp.StatusCode, string(body))
 	}
 
 	// Process Server-Sent Events
@@ -407,28 +497,88 @@ func (icm *InferenceClientModel) callStreamingAPI(kwargs map[string]interface{},
 
 // parseResponse parses the API response into a ChatMessage
 func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) (*ChatMessage, error) {
-	choices, ok := response["choices"].([]map[string]interface{})
-	if !ok || len(choices) == 0 {
-		return nil, fmt.Errorf("invalid response format: no choices found")
+	debugMode := os.Getenv("SMOLAGENTS_DEBUG") == "true"
+
+	// Handle choices array - it can be []interface{} or []map[string]interface{}
+	var choices []interface{}
+	if c, ok := response["choices"].([]interface{}); ok {
+		choices = c
+	} else if c, ok := response["choices"].([]map[string]interface{}); ok {
+		choices = make([]interface{}, len(c))
+		for i, v := range c {
+			choices[i] = v
+		}
+	} else {
+		if debugMode {
+			fmt.Printf("[DEBUG] Invalid response format - full response: %v\n", response)
+		}
+		return nil, fmt.Errorf("[Model: %s] invalid response format: no choices found", icm.ModelID)
 	}
 
-	choice := choices[0]
+	if len(choices) == 0 {
+		if debugMode {
+			fmt.Printf("[DEBUG] Empty choices array in response\n")
+		}
+		return nil, fmt.Errorf("[Model: %s] invalid response format: empty choices", icm.ModelID)
+	}
+
+	// Get the first choice
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		if debugMode {
+			fmt.Printf("[DEBUG] First choice is not a map: %T\n", choices[0])
+		}
+		return nil, fmt.Errorf("[Model: %s] invalid response format: choice is not a map", icm.ModelID)
+	}
+
+	// Extract message from choice
 	messageData, ok := choice["message"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid response format: no message found")
+		if debugMode {
+			fmt.Printf("[DEBUG] No message in choice: %v\n", choice)
+		}
+		return nil, fmt.Errorf("[Model: %s] invalid response format: no message found in choice", icm.ModelID)
 	}
 
-	message := &ChatMessage{}
-	err := message.FromDict(messageData, response, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse message: %w", err)
+	// Create ChatMessage from the message data
+	role, _ := messageData["role"].(string)
+	content, _ := messageData["content"].(string)
+
+	// Validate content is not empty
+	if content == "" {
+		if debugMode {
+			fmt.Printf("[DEBUG] Empty content in message: %v\n", messageData)
+		}
+		return nil, fmt.Errorf("[Model: %s] received empty content in response", icm.ModelID)
+	}
+
+	message := &ChatMessage{
+		Role:    role,
+		Content: &content,
+		Raw:     response,
 	}
 
 	// Parse token usage if available
 	if usage, ok := response["usage"].(map[string]interface{}); ok {
-		if inputTokens, ok := usage["prompt_tokens"].(float64); ok {
-			if outputTokens, ok := usage["completion_tokens"].(float64); ok {
-				message.TokenUsage = monitoring.NewTokenUsage(int(inputTokens), int(outputTokens))
+		promptTokens := 0
+		completionTokens := 0
+		
+		if pt, ok := usage["prompt_tokens"].(float64); ok {
+			promptTokens = int(pt)
+		}
+		if ct, ok := usage["completion_tokens"].(float64); ok {
+			completionTokens = int(ct)
+		}
+		
+		if promptTokens > 0 || completionTokens > 0 {
+			message.TokenUsage = &monitoring.TokenUsage{
+				InputTokens:  promptTokens,
+				OutputTokens: completionTokens,
+				TotalTokens:  promptTokens + completionTokens,
+			}
+			if debugMode {
+				fmt.Printf("[DEBUG] Token usage - Input: %d, Output: %d, Total: %d\n", 
+					promptTokens, completionTokens, promptTokens+completionTokens)
 			}
 		}
 	}

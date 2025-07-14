@@ -36,17 +36,17 @@ type (
 
 // Core agent interfaces and types
 type (
-	MultiStepAgent     = agents.MultiStepAgent
-	BaseMultiStepAgent = agents.BaseMultiStepAgent
-	ToolCallingAgent   = agents.ToolCallingAgent
-	CodeAgent          = agents.CodeAgent
-	RunResult          = agents.RunResult
-	RunOptions         = agents.RunOptions
-	PromptTemplates    = agents.PromptTemplates
-	FinalOutput        = agents.FinalOutput
-	AgentConfig        = agents.AgentConfig
-	StreamStepResult   = agents.StreamStepResult
-	StepCallback       = agents.StepCallback
+	MultiStepAgent        = agents.MultiStepAgent
+	BaseMultiStepAgent    = agents.BaseMultiStepAgent
+	ReactCodeAgent        = agents.ReactCodeAgent
+	ReactCodeAgentOptions = agents.ReactCodeAgentOptions
+	RunResult             = agents.RunResult
+	RunOptions            = agents.RunOptions
+	PromptTemplates       = agents.PromptTemplates
+	FinalOutput           = agents.FinalOutput
+	AgentConfig           = agents.AgentConfig
+	StreamStepResult      = agents.StreamStepResult
+	StepCallback          = agents.StepCallback
 )
 
 // Tool system
@@ -137,13 +137,11 @@ type (
 // Constructor functions
 var (
 	// Agent constructors
-	NewBaseMultiStepAgent     = agents.NewBaseMultiStepAgent
-	NewToolCallingAgent       = agents.NewToolCallingAgent
-	NewToolCallingAgentSimple = agents.NewToolCallingAgentSimple
-	NewCodeAgent              = agents.NewCodeAgent
-	NewCodeAgentSimple        = agents.NewCodeAgentSimple
-	CreateAgent               = agents.CreateAgent
-	DefaultAgentConfig        = agents.DefaultAgentConfig
+	NewBaseMultiStepAgent        = agents.NewBaseMultiStepAgent
+	NewReactCodeAgent            = agents.NewReactCodeAgent
+	DefaultReactCodeAgentOptions = agents.DefaultReactCodeAgentOptions
+	CreateAgent                  = agents.CreateAgent
+	DefaultAgentConfig           = agents.DefaultAgentConfig
 
 	// Tool constructors - will be added when tools package is complete
 	// NewBaseTool            = tools.NewBaseTool

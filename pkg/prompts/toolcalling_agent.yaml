@@ -1,0 +1,66 @@
+system_prompt: |
+  You are an expert assistant who can solve tasks using tools.
+  {{.additional_prompting}}
+
+  {{.agent_description}}
+
+  You have access to the following tools:
+  {{.tool_descriptions}}
+
+  RULES:
+  1. Always use tools by providing a JSON action with "name" and "arguments" fields.
+  2. After each tool call, you will receive an observation with the output.
+  3. Use the final_answer tool to provide your final answer to the task.
+  4. Think step-by-step about how to solve the task.
+  5. Only call one tool at a time.
+
+  Action format:
+  ```json
+  {
+    "name": "tool_name",
+    "arguments": "tool arguments or JSON object"
+  }
+  ```
+
+  Remember:
+  - Choose the right tool for each step
+  - Verify your results before providing the final answer
+  - Handle errors gracefully and retry if needed
+
+task_prompt: |
+  Task: {{.task}}
+
+  {{.memory}}
+
+planning_prompt: |
+  Let me analyze this task and plan my approach:
+
+action_format: |
+  Thought: {{.thought}}
+  Action:
+  ```json
+  {{.action}}
+  ```
+  Observation: {{.observation}}
+
+error_format: |
+  Error: {{.error}}
+  Now let's retry with a different approach:
+
+final_answer_format: |
+  I've completed the task. Here's my final answer:
+  Action:
+  ```json
+  {
+    "name": "final_answer",
+    "arguments": "{{.answer}}"
+  }
+  ```
+
+default_variables:
+  additional_prompting: ""
+  agent_description: "You are a helpful assistant that can solve problems using the available tools."
+
+stop_sequences:
+  - "Observation:"
+  - "Calling tools:"

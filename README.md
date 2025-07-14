@@ -11,8 +11,6 @@ built by: [rizome labs](https://rizome.dev)
 
 contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
-**warning**: this project is an internal WIP library in use by Rizome Labs. things might break in production environments, so test carefully.
-
 ## 🚀 Quick Start
 
 ### From Source
@@ -22,11 +20,9 @@ git clone https://github.com/rizome-dev/go-smolagents
 cd go-smolagents
 go mod download
 
-# Build CLI tool
-go build -o bin/smolagents-cli ./cmd/smolagents-cli
-
-# Interactive mode
-./bin/smolagents-cli --help
+# Build and test
+go build ./...
+go test ./...
 ```
 
 ### Environment Variables
@@ -41,83 +37,72 @@ export SERP_API_KEY="..."                   # Google search via SerpAPI
 export SERPER_API_KEY="..."                # Alternative Google search
 ```
 
-## 🛠️ CLI Usage
+## 🛠️ Library Usage
 
-### Basic Commands
-```bash
-# Simple task execution
-./bin/smolagents-cli run "Calculate fibonacci numbers up to 100"
+### Basic Example
+```go
+package main
 
-# With specific tools
-./bin/smolagents-cli run --tools web_search,python_interpreter \
-  "Research AI trends and create a Python analysis"
+import (
+    "fmt"
+    "os"
+    "github.com/rizome-dev/go-smolagents/pkg/agents"
+    "github.com/rizome-dev/go-smolagents/pkg/models"
+)
 
-# Different agent types
-./bin/smolagents-cli run --agent code \
-  "Write and test a Go function to reverse a string"
+func main() {
+    token := os.Getenv("HF_API_TOKEN")
+    model := models.NewInferenceClientModel("Qwen/Qwen2.5-Coder-32B-Instruct", token)
+    
+    agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
+    if err != nil {
+        panic(err)
+    }
+    
+    result, err := agent.Run(&agents.RunOptions{
+        Task: "Calculate the factorial of 10",
+    })
+    
+    fmt.Printf("Result: %v\n", result.Output)
+}
 
-# Interactive session
-./bin/smolagents-cli run --interactive --verbose
-
-# Deep research mode (multi-agent)
-./bin/smolagents-cli research "climate change solutions"
 ```
 
-### Available Options
-```bash
-# Model configuration
---model-type openai --model gpt-4
---model-type hf --model meta-llama/Llama-2-7b-chat-hf
+## 📚 Library Features
 
-# Agent types
---agent tool-calling    # General purpose (default)
---agent code           # Code-focused with execution
---agent research       # Multi-agent research system
-
-# Tool selection
---tools web_search,wikipedia_search,python_interpreter,final_answer
-
-# Execution options
---interactive          # Interactive TUI mode
---verbose             # Detailed logging
---max-steps 20        # Maximum reasoning steps
-```
-
-## 📚 Library Usage
-
-### Basic Agent
+### ReactCodeAgent with Custom Options
 ```go
 package main
 
 import (
     "github.com/rizome-dev/go-smolagents/pkg/agents"
     "github.com/rizome-dev/go-smolagents/pkg/models"
-    "github.com/rizome-dev/go-smolagents/pkg/default_tools"
 )
 
 func main() {
     // Create model
-    model, _ := models.CreateModel(models.ModelTypeOpenAIServer, "gpt-3.5-turbo", map[string]interface{}{
+    model, _ := models.CreateModel(models.ModelTypeOpenAIServer, "gpt-4", map[string]interface{}{
         "api_key": "your-api-key",
     })
     
-    // Create tools
-    tools := []tools.Tool{
-        default_tools.NewWebSearchTool(),
-        default_tools.NewPythonInterpreterTool(),
-        default_tools.NewFinalAnswerTool(),
+    // Custom agent options
+    options := &agents.ReactCodeAgentOptions{
+        AuthorizedPackages: []string{"fmt", "strings", "math", "json"},
+        EnablePlanning:     true,
+        PlanningInterval:   3,
+        MaxSteps:          15,
+        Verbose:           true,
     }
     
     // Create agent
-    agent, _ := agents.NewToolCallingAgent(model, tools, "system", map[string]interface{}{
-        "max_steps": 10,
-    })
+    agent, err := agents.NewReactCodeAgent(model, nil, "You are a helpful coding assistant.", options)
+    if err != nil {
+        panic(err)
+    }
     
     // Run task
-    maxSteps := 10
     result, _ := agent.Run(&agents.RunOptions{
-        Task:     "Research the latest AI developments",
-        MaxSteps: &maxSteps,
+        Task: "Write a function to check if a string is a palindrome and test it",
     })
     
     fmt.Printf("Result: %v\n", result.Output)
@@ -168,32 +153,19 @@ models.CreateModel(models.ModelTypeMLX, "mlx-model", options)
 
 ## 🔬 Examples
 
-### 1. Simple Calculator Agent
+### ReactCodeAgent Example
 ```bash
-cd internal/examples
-go run calculator/main.go
+cd examples/react_code_agent
+export HF_API_TOKEN="your_token_here"
+go run main.go
 ```
 
-### 2. Web Search Agent
-```bash
-cd internal/examples  
-go run websearch/main.go
-```
-
-### 3. Multi-Agent Research System
-```bash
-cd internal/examples/research_agent
-go run main.go "artificial intelligence in healthcare"
-
-# Or via CLI
-./bin/smolagents-cli research "quantum computing applications"
-```
-
-The research system demonstrates:
-- **Manager Agent**: Coordinates research strategy
-- **3+ Worker Agents**: Parallel research execution
-- **Advanced Tools**: Web search, Wikipedia, analysis
-- **Result Synthesis**: AI-powered aggregation and reporting
+The ReactCodeAgent demonstrates:
+- **ReAct Framework**: Thought → Code → Observation cycles
+- **Dynamic Parsing**: Extracts reasoning and code from LLM responses
+- **Sandboxed Execution**: Safe Go code execution with security restrictions
+- **Planning System**: Step-by-step reasoning for complex tasks
+- **YAML Prompts**: Customizable prompt templates for different behaviors
 
 ## 🏗️ Advanced Features
 
@@ -242,8 +214,8 @@ go test ./pkg/smolagents/agents
 go test ./pkg/smolagents/tools
 go test ./pkg/smolagents/models
 
-# Run examples
-cd internal/examples/research_agent && go run main.go "test topic"
+# Run example
+cd examples/react_code_agent && go run main.go
 ```
 
 ## 🔧 Configuration
@@ -313,4 +285,4 @@ Based on the original [smolagents](https://github.com/huggingface/smolagents) Py
 
 ---
 
-**Get started in 30 seconds**: `export OPENAI_API_KEY="sk-..." && go run ./cmd/smolagents-cli run "Hello AI!"`
+**Get started in 30 seconds**: Create a simple Go file with the ReactCodeAgent example above and run it!

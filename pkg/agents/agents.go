@@ -1,8 +1,8 @@
 // Package agents provides the core agent implementations for smolagents.
 //
-// This includes MultiStepAgent, ToolCallingAgent, CodeAgent, and supporting
-// infrastructure for the ReAct framework, tool calling, and code execution.
-// It maintains 1-to-1 parity with the Python smolagents agents module.
+// This includes MultiStepAgent, ReactCodeAgent, and supporting infrastructure
+// for the ReAct framework with code execution. The ReactCodeAgent implements
+// proper Thought/Code/Observation cycles with YAML-based prompts and sandboxed execution.
 package agents
 
 import (
@@ -612,10 +612,28 @@ func CreateAgent(config *AgentConfig, agentType string) (MultiStepAgent, error) 
 	}
 
 	switch agentType {
-	case "tool_calling":
-		return NewToolCallingAgent(config.Model, config.Tools, config.SystemPrompt, options)
-	case "code":
-		return NewCodeAgent(config.Model, config.Tools, config.SystemPrompt, options)
+	case "react_code", "code":
+		// Convert generic options to ReactCodeAgentOptions
+		reactOptions := &ReactCodeAgentOptions{
+			MaxSteps:         config.MaxSteps,
+			EnablePlanning:   config.Planning,
+			PlanningInterval: config.PlanningInterval,
+			StreamOutputs:    true,
+			Verbose:          false,
+		}
+
+		// Apply additional options
+		if val, ok := config.Additional["authorized_packages"].([]string); ok {
+			reactOptions.AuthorizedPackages = val
+		}
+		if val, ok := config.Additional["stream_outputs"].(bool); ok {
+			reactOptions.StreamOutputs = val
+		}
+		if val, ok := config.Additional["verbose"].(bool); ok {
+			reactOptions.Verbose = val
+		}
+
+		return NewReactCodeAgent(config.Model, config.Tools, config.SystemPrompt, reactOptions)
 	default:
 		return nil, utils.NewAgentError(fmt.Sprintf("unknown agent type: %s", agentType))
 	}
