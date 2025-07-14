@@ -11,35 +11,10 @@ built by: [rizome labs](https://rizome.dev)
 
 contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
-## 🚀 Quick Start
+## Quick Start
 
-### From Source
+### Simple Usage
 
-```bash
-git clone https://github.com/rizome-dev/go-smolagents
-cd go-smolagents
-go mod download
-
-# Build and test
-go build ./...
-go test ./...
-```
-
-### Environment Variables
-```bash
-# Required: At least one model API key
-export OPENAI_API_KEY="sk-..."              # Recommended
-# OR
-export HF_API_TOKEN="hf_..."                # HuggingFace alternative
-
-# Optional: Enhanced search capabilities
-export SERP_API_KEY="..."                   # Google search via SerpAPI
-export SERPER_API_KEY="..."                # Alternative Google search
-```
-
-## 🛠️ Library Usage
-
-### Basic Example
 ```go
 package main
 
@@ -65,12 +40,10 @@ func main() {
     
     fmt.Printf("Result: %v\n", result.Output)
 }
-
 ```
 
-## 📚 Library Features
-
 ### ReactCodeAgent with Custom Options
+
 ```go
 package main
 
@@ -110,6 +83,7 @@ func main() {
 ```
 
 ### Available Tools
+
 ```go
 // Web & Search
 default_tools.NewWebSearchTool()        // Multi-engine web search
@@ -151,7 +125,7 @@ models.CreateModel(models.ModelTypeVLLM, "local-model", options)
 models.CreateModel(models.ModelTypeMLX, "mlx-model", options)
 ```
 
-## 🔬 Examples
+## Examples
 
 ### ReactCodeAgent Example
 ```bash
@@ -167,7 +141,7 @@ The ReactCodeAgent demonstrates:
 - **Planning System**: Step-by-step reasoning for complex tasks
 - **YAML Prompts**: Customizable prompt templates for different behaviors
 
-## 🏗️ Advanced Features
+## Advanced Features
 
 ### Multi-Agent Coordination
 ```go
@@ -218,26 +192,6 @@ go test ./pkg/smolagents/models
 cd examples/react_code_agent && go run main.go
 ```
 
-## 🔧 Configuration
-
-### Environment Variables
-```bash
-# Model APIs
-export OPENAI_API_KEY="sk-..."
-export HF_API_TOKEN="hf_..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Search APIs (optional)
-export SERP_API_KEY="..."
-export SERPER_API_KEY="..."
-export GOOGLE_API_KEY="..."
-
-# AWS (for Bedrock)
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_REGION="us-east-1"
-```
-
 ### Custom Tools
 ```go
 // Implement the Tool interface
@@ -256,33 +210,14 @@ default_tools.RegisterTool("my_tool", func() tools.Tool {
 })
 ```
 
-## 📈 Use Cases
-
-- **Research & Analysis**: Multi-source information gathering
-- **Code Development**: AI-assisted programming with execution
-- **Content Creation**: Research-backed writing and analysis
-- **Data Processing**: Automated analysis and visualization
-- **Business Intelligence**: Market research and competitive analysis
-- **Educational**: Interactive learning and explanation
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes following Go conventions
-4. Add tests for new functionality
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## 📄 License
+## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
-## 🙏 Credits
+## Credits
 
 Based on the original [smolagents](https://github.com/huggingface/smolagents) Python library by HuggingFace.
 
 ---
 
-**Get started in 30 seconds**: Create a simple Go file with the ReactCodeAgent example above and run it!
+**Built with ❤️  by Rizome Labs, Inc.**
