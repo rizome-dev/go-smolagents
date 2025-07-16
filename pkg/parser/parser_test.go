@@ -418,19 +418,19 @@ fmt.Println(result)`,
 }
 
 func TestParserCustomTags(t *testing.T) {
-	parser := NewParserWithTags("```python", "```")
+	parser := NewParserWithTags("```go", "```")
 
 	input := `Thought: Custom tags test
-` + "```python" + `
-x = 42
-print(x)
+` + "```go" + `
+x := 42
+fmt.Println(x)
 ` + "```"
 
 	result := parser.Parse(input)
 	if result.Type != "code" {
 		t.Errorf("Expected type 'code', got %s", result.Type)
 	}
-	if !strings.Contains(result.Content, "x = 42") {
+	if !strings.Contains(result.Content, "x := 42") {
 		t.Errorf("Code not extracted properly: %s", result.Content)
 	}
 }

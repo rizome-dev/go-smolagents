@@ -188,7 +188,20 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	}
 
 	// Add task to memory
-	taskStep := memory.NewTaskStep(options.Task, options.Images)
+	// Convert images if provided
+	var taskImages []*models.MediaContent
+	if len(options.Images) > 0 {
+		for _, img := range options.Images {
+			// Assume images are provided as URLs or base64 strings
+			if imgStr, ok := img.(string); ok {
+				mediaContent, _ := models.LoadImageURL(imgStr, "auto")
+				if mediaContent != nil {
+					taskImages = append(taskImages, mediaContent)
+				}
+			}
+		}
+	}
+	taskStep := memory.NewTaskStep(options.Task, taskImages)
 	rca.memory.AddStep(taskStep)
 	
 	// Determine max steps
@@ -359,11 +372,36 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 		if !skipMessage && len(msg.Content) > 0 {
 			// Check if it's a task message
 			if textContent, ok := msg.Content[0]["text"].(string); ok {
-				skipMessage = strings.HasPrefix(textContent, "Task:")
+				skipMessage = strings.HasPrefix(textContent, "Task:") || strings.HasPrefix(textContent, "New task:")
+				// Also skip if content is empty
+				if textContent == "" {
+					skipMessage = true
+				}
 			}
+		} else if !skipMessage && len(msg.Content) == 0 {
+			// Skip messages with no content
+			skipMessage = true
 		}
 		if !skipMessage {
-			messages = append(messages, msg.ToDict())
+			msgDict := msg.ToDict()
+			// Additional validation to ensure we're not adding empty messages
+			if content, ok := msgDict["content"].([]map[string]interface{}); ok && len(content) > 0 {
+				// Check if at least one content item has text
+				hasText := false
+				for _, item := range content {
+					if text, ok := item["text"].(string); ok && text != "" {
+						hasText = true
+						break
+					}
+				}
+				if hasText {
+					messages = append(messages, msgDict)
+				}
+			} else if toolCalls, ok := msgDict["tool_calls"].([]map[string]interface{}); ok && len(toolCalls) > 0 {
+				// Message has tool calls, include it
+				messages = append(messages, msgDict)
+			}
+			// Otherwise skip the message
 		}
 	}
 
@@ -379,7 +417,11 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 	genOptions := &models.GenerateOptions{
 		MaxTokens:     func() *int { v := 2048; return &v }(),
 		Temperature:   func() *float64 { v := 0.3; return &v }(),
-		StopSequences: stopSequences,
+	}
+	
+	// Only add stop sequences if the model supports them
+	if models.SupportsStopParameter(rca.model.GetModelID()) {
+		genOptions.StopSequences = stopSequences
 	}
 
 	// Add structured output format if enabled
@@ -406,6 +448,11 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 				rca.display.Info(fmt.Sprintf("Retrying after %v (attempt %d/%d)...", waitTime, attempt+1, maxRetries))
 			}
 			time.Sleep(waitTime)
+		}
+
+		// Add debug logging for retries
+		if rca.verbose && attempt > 0 {
+			rca.display.Info(fmt.Sprintf("Calling model.Generate() - attempt %d/%d", attempt+1, maxRetries))
 		}
 
 		response, err = rca.model.Generate(messages, genOptions)
@@ -440,13 +487,25 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 		return nil, step.Error
 	}
 
+	if response.Content != nil {
+		step.ModelOutput = *response.Content
+		
+		// Clean response for models that don't respect stop sequences (e.g., Kimi)
+		// Remove any content after "Observation:" which should be system-generated
+		if idx := strings.Index(step.ModelOutput, "Observation:"); idx >= 0 {
+			step.ModelOutput = strings.TrimSpace(step.ModelOutput[:idx])
+			if rca.verbose {
+				rca.display.Info("Cleaned model output by removing generated 'Observation:' content")
+			}
+			// Update the response content to the cleaned version
+			cleanedContent := step.ModelOutput
+			response.Content = &cleanedContent
+		}
+	}
+	
 	step.ModelOutputMessage = &models.ChatMessage{
 		Role:    response.Role,
 		Content: response.Content,
-	}
-
-	if response.Content != nil {
-		step.ModelOutput = *response.Content
 	}
 	step.TokenUsage = response.TokenUsage
 
@@ -780,8 +839,25 @@ func (rca *ReactCodeAgent) executePlanningStep(ctx context.Context) error {
 
 	// Generate planning response
 	genOptions := &models.GenerateOptions{
-		MaxTokens:   func() *int { v := 1024; return &v }(),
-		Temperature: func() *float64 { v := 0.5; return &v }(),
+		MaxTokens:      func() *int { v := 1024; return &v }(),
+		Temperature:    func() *float64 { v := 0.5; return &v }(),
+	}
+	
+	// Only add stop sequences if the model supports them
+	if models.SupportsStopParameter(rca.model.GetModelID()) {
+		genOptions.StopSequences = []string{"<end_plan>"}
+	}
+
+	// Add debug logging
+	if rca.verbose {
+		rca.display.Info(fmt.Sprintf("Planning prompt length: %d characters", len(planningPrompt)))
+		rca.display.Info(fmt.Sprintf("Number of messages being sent: %d", len(modelMessages)))
+		// Log the planning prompt content for debugging
+		if len(planningPrompt) > 200 {
+			rca.display.Info(fmt.Sprintf("Planning prompt preview: %s...", planningPrompt[:200]))
+		} else {
+			rca.display.Info(fmt.Sprintf("Planning prompt: %s", planningPrompt))
+		}
 	}
 
 	response, err := rca.model.Generate(modelMessages, genOptions)
@@ -789,10 +865,23 @@ func (rca *ReactCodeAgent) executePlanningStep(ctx context.Context) error {
 		return fmt.Errorf("planning generation failed: %w", err)
 	}
 
+	// Debug logging
+	if rca.verbose {
+		if response != nil && response.Content != nil {
+			rca.display.Info(fmt.Sprintf("Received planning response (length: %d)", len(*response.Content)))
+		} else {
+			rca.display.Info("Received nil or empty planning response")
+		}
+	}
+
 	// Create planning step with proper arguments
 	var planContent string
 	if response.Content != nil {
 		planContent = *response.Content
+		// Clean the plan content by removing <end_plan> tag
+		if idx := strings.Index(planContent, "<end_plan>"); idx >= 0 {
+			planContent = strings.TrimSpace(planContent[:idx])
+		}
 		// Display the planning output
 		rca.display.Planning(planContent)
 	}
@@ -918,35 +1007,290 @@ func (rca *ReactCodeAgent) getMessagesForResult() []map[string]interface{} {
 func (rca *ReactCodeAgent) RunStream(options *RunOptions) (<-chan *StreamStepResult, error) {
 	resultChan := make(chan *StreamStepResult, 100)
 
+	// Apply defaults
+	if options == nil {
+		options = &RunOptions{}
+	}
+	if options.Task == "" {
+		close(resultChan)
+		return resultChan, fmt.Errorf("task is required")
+	}
+
 	go func() {
 		defer close(resultChan)
 
-		// For now, just run normally and send the final result
-		// TODO: Implement proper streaming with partial outputs
-		result, err := rca.Run(options)
-		if err != nil {
-			resultChan <- &StreamStepResult{
-				Error:      err,
-				IsComplete: true,
+		// Initialize agent state
+		if options.Reset {
+			rca.Reset()
+		}
+
+		// Add task to memory
+		// Convert images if provided
+		var taskImages []*models.MediaContent
+		if len(options.Images) > 0 {
+			for _, img := range options.Images {
+				// Assume images are provided as URLs or base64 strings
+				if imgStr, ok := img.(string); ok {
+					mediaContent, _ := models.LoadImageURL(imgStr, "auto")
+					if mediaContent != nil {
+						taskImages = append(taskImages, mediaContent)
+					}
+				}
 			}
-			return
+		}
+		taskStep := memory.NewTaskStep(options.Task, taskImages)
+		rca.memory.AddStep(taskStep)
+
+		// Determine max steps
+		maxSteps := rca.maxSteps
+		if options.MaxSteps != nil {
+			maxSteps = *options.MaxSteps
+		}
+
+		// Main execution loop
+		stepNumber := 0
+		finalAnswer := ""
+		for stepNumber < maxSteps {
+			stepNumber++
+			rca.stepCount++
+
+			// Send step start event
+			resultChan <- &StreamStepResult{
+				StepNumber: stepNumber,
+				StepType:   "step_start",
+				Metadata: map[string]interface{}{
+					"step": stepNumber,
+			},
+			}
+
+			// Execute streaming step
+			result, err := rca.executeStreamingStep(stepNumber, options, resultChan)
+			if err != nil {
+				resultChan <- &StreamStepResult{
+					StepNumber: stepNumber,
+					StepType:   "error",
+					Error:      err,
+					IsComplete: true,
+				}
+				return
+			}
+
+			// Check if we have a final answer
+			if result.isFinalAnswer {
+				if outputStr, ok := result.output.(string); ok {
+					finalAnswer = outputStr
+				} else {
+					finalAnswer = fmt.Sprintf("%v", result.output)
+				}
+				break
+			}
 		}
 
 		// Send final result
 		resultChan <- &StreamStepResult{
-			StepNumber: rca.stepCount,
+			StepNumber: stepNumber,
 			StepType:   "final",
-			Output:     result.Output,
+			Output:     finalAnswer,
 			IsComplete: true,
 			Metadata: map[string]interface{}{
-				"state":       result.State,
-				"step_count":  result.StepCount,
-				"token_usage": result.TokenUsage,
+				"state":       "completed",
+				"step_count":  stepNumber,
+				"token_usage": nil, // TODO: Aggregate token usage from steps
 			},
 		}
 	}()
 
 	return resultChan, nil
+}
+
+// executeStreamingStep executes a single step with streaming support
+func (rca *ReactCodeAgent) executeStreamingStep(stepNumber int, options *RunOptions, resultChan chan<- *StreamStepResult) (*stepResult, error) {
+	step := memory.NewActionStep(stepNumber)
+	defer func() {
+		step.Timing.End()
+		rca.memory.AddStep(step)
+	}()
+
+	// Build messages
+	memoryMessages, err := rca.memory.WriteMemoryToMessages(false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build memory messages: %w", err)
+	}
+	step.ModelInputMessages = memoryMessages
+
+	// Prepare generation options
+	maxTokens := 2048
+	temperature := 0.7
+	genOptions := &models.GenerateOptions{
+		MaxTokens:     &maxTokens,
+		Temperature:   &temperature,
+	}
+	
+	// Only add stop sequences if the model supports them
+	if models.SupportsStopParameter(rca.model.GetModelID()) {
+		stopSequences := []string{"Observation:"}
+		if rca.codeBlockTags[1] != "" && !strings.Contains(rca.codeBlockTags[0], rca.codeBlockTags[1]) {
+			stopSequences = append(stopSequences, rca.codeBlockTags[1])
+		}
+		genOptions.StopSequences = stopSequences
+	}
+
+	// Check if model supports streaming
+	if rca.model.SupportsStreaming() && rca.streamOutputs {
+		// Convert messages to interface{} slice
+		var messages []interface{}
+		for _, msg := range memoryMessages {
+			messages = append(messages, msg)
+		}
+		
+		// Stream model output
+		streamChan, err := rca.model.GenerateStream(messages, genOptions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate stream: %w", err)
+		}
+
+		// Accumulate streamed content
+		var fullContent strings.Builder
+		for delta := range streamChan {
+			if delta.Content != nil {
+				fullContent.WriteString(*delta.Content)
+				// Send streaming content
+				resultChan <- &StreamStepResult{
+					StepNumber: stepNumber,
+					StepType:   "stream_delta",
+					Output:     *delta.Content,
+					Metadata: map[string]interface{}{
+						"delta_type": "content",
+					},
+				}
+			}
+		}
+
+		modelOutput := fullContent.String()
+		step.ModelOutput = modelOutput
+
+		// Parse and execute the output
+		parseResult := rca.responseParser.Parse(modelOutput)
+		return rca.processParseResult(parseResult, step, resultChan)
+	} else {
+		// Convert messages to interface{} slice
+		var messages []interface{}
+		for _, msg := range memoryMessages {
+			messages = append(messages, msg)
+		}
+		
+		// Non-streaming execution
+		chatMessage, err := rca.model.Generate(messages, genOptions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate response: %w", err)
+		}
+
+		step.ModelOutputMessage = chatMessage
+		modelOutput := ""
+		if chatMessage.Content != nil {
+			modelOutput = *chatMessage.Content
+		}
+		step.ModelOutput = modelOutput
+
+		// Send the complete model output
+		resultChan <- &StreamStepResult{
+			StepNumber: stepNumber,
+			StepType:   "model_output",
+			Output:     modelOutput,
+		}
+
+		// Parse and execute
+		parseResult := rca.responseParser.Parse(modelOutput)
+		return rca.processParseResult(parseResult, step, resultChan)
+	}
+}
+
+// processParseResult processes the parsed result and sends appropriate streaming events
+func (rca *ReactCodeAgent) processParseResult(parseResult *parser.ParseResult, step *memory.ActionStep, resultChan chan<- *StreamStepResult) (*stepResult, error) {
+	result := &stepResult{
+		isFinalAnswer: false,
+	}
+
+	// Send thought if present
+	if parseResult.Thought != "" {
+		resultChan <- &StreamStepResult{
+			StepNumber: step.StepNumber,
+			StepType:   "thought",
+			Output:     parseResult.Thought,
+		}
+	}
+
+	switch parseResult.Type {
+	case "code":
+		// Send code event
+		resultChan <- &StreamStepResult{
+			StepNumber: step.StepNumber,
+			StepType:   "code",
+			Output:     parseResult.Content,
+		}
+
+		// Execute code
+		execResult, err := rca.goExecutor.ExecuteRaw(parseResult.Content, rca.authorizedPackages)
+		if err != nil {
+			step.Error = err
+			step.Observations = fmt.Sprintf("Error: %v", err)
+			// Send error observation
+			resultChan <- &StreamStepResult{
+				StepNumber: step.StepNumber,
+				StepType:   "observation",
+				Output:     step.Observations,
+				Metadata: map[string]interface{}{
+					"has_error": true,
+				},
+			}
+		} else {
+			// Convert output to string
+			outputStr := fmt.Sprintf("%v", execResult.Output)
+			step.Observations = outputStr
+			
+			// Check for errors based on exit code or stderr
+			hasError := execResult.ExitCode != 0 || execResult.Stderr != ""
+			if hasError {
+				step.Error = fmt.Errorf("execution failed: %s", execResult.Stderr)
+			}
+			
+			// Send observation
+			resultChan <- &StreamStepResult{
+				StepNumber: step.StepNumber,
+				StepType:   "observation",
+				Output:     outputStr,
+				Metadata: map[string]interface{}{
+					"has_error": hasError,
+					"stdout":    execResult.Stdout,
+					"stderr":    execResult.Stderr,
+				},
+			}
+			
+			if execResult.IsFinalAnswer {
+				result.isFinalAnswer = true
+				result.output = execResult.FinalAnswer
+			}
+		}
+
+	case "final_answer":
+		result.isFinalAnswer = true
+		result.output = parseResult.Content
+		resultChan <- &StreamStepResult{
+			StepNumber: step.StepNumber,
+			StepType:   "final_answer",
+			Output:     parseResult.Content,
+		}
+
+	case "error":
+		step.Error = fmt.Errorf("parsing error: %s", parseResult.Content)
+		resultChan <- &StreamStepResult{
+			StepNumber: step.StepNumber,
+			StepType:   "error",
+			Error:      step.Error,
+		}
+	}
+
+	return result, nil
 }
 
 // ToDict exports the agent configuration

@@ -2,14 +2,13 @@
 //
 // This includes step-by-step tracking of agent actions, tool calls, planning steps,
 // and conversation history management.
-//
-// This is a 1-to-1 port of the Python smolagents.memory module.
 package memory
 
 import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"strings"
 	"time"
 
 	"github.com/rizome-dev/go-smolagents/pkg/models"
@@ -147,7 +146,7 @@ type ActionStep struct {
 	ModelOutputMessage *models.ChatMessage    `json:"model_output_message,omitempty"`
 	ModelOutput        string                 `json:"model_output,omitempty"`
 	Observations       string                 `json:"observations,omitempty"`
-	ObservationImages  []interface{}          `json:"observation_images,omitempty"`
+	ObservationImages  []*models.MediaContent `json:"observation_images,omitempty"`
 	ActionOutput       interface{}            `json:"action_output,omitempty"`
 	TokenUsage         *monitoring.TokenUsage `json:"token_usage,omitempty"`
 }
@@ -166,7 +165,7 @@ func NewActionStep(stepNumber int, startTime ...time.Time) *ActionStep {
 }
 
 // NewActionStepWithImages creates a new action step with images
-func NewActionStepWithImages(stepNumber int, startTime time.Time, images []interface{}) *ActionStep {
+func NewActionStepWithImages(stepNumber int, startTime time.Time, images []*models.MediaContent) *ActionStep {
 	return &ActionStep{
 		StepNumber:        stepNumber,
 		Timing:            monitoring.Timing{StartTime: startTime},
@@ -183,7 +182,7 @@ func (as *ActionStep) GetError() error                            { return as.Er
 func (as *ActionStep) GetModelOutputMessage() *models.ChatMessage { return as.ModelOutputMessage }
 func (as *ActionStep) GetModelOutput() string                     { return as.ModelOutput }
 func (as *ActionStep) GetObservations() string                    { return as.Observations }
-func (as *ActionStep) GetObservationImages() []interface{}        { return as.ObservationImages }
+func (as *ActionStep) GetObservationImages() []*models.MediaContent { return as.ObservationImages }
 func (as *ActionStep) GetActionOutput() interface{}               { return as.ActionOutput }
 func (as *ActionStep) GetTokenUsage() *monitoring.TokenUsage      { return as.TokenUsage }
 
@@ -195,7 +194,7 @@ func (as *ActionStep) SetError(err error)                            { as.Error 
 func (as *ActionStep) SetModelOutputMessage(msg *models.ChatMessage) { as.ModelOutputMessage = msg }
 func (as *ActionStep) SetModelOutput(output string)                  { as.ModelOutput = output }
 func (as *ActionStep) SetObservations(obs string)                    { as.Observations = obs }
-func (as *ActionStep) SetObservationImages(images []interface{})     { as.ObservationImages = images }
+func (as *ActionStep) SetObservationImages(images []*models.MediaContent) { as.ObservationImages = images }
 func (as *ActionStep) SetActionOutput(output interface{})            { as.ActionOutput = output }
 func (as *ActionStep) SetTokenUsage(usage *monitoring.TokenUsage)    { as.TokenUsage = usage }
 
@@ -211,6 +210,9 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 	// Add model output if available and not in summary mode
 	if as.ModelOutput != "" && !summaryMode {
 		messages = append(messages, *NewMessage(models.RoleAssistant, as.ModelOutput))
+	} else if !summaryMode && as.ModelOutputMessage != nil && as.ModelOutputMessage.Content != nil && *as.ModelOutputMessage.Content != "" {
+		// If ModelOutput is empty but we have a ModelOutputMessage with content, use that
+		messages = append(messages, *NewMessage(models.RoleAssistant, *as.ModelOutputMessage.Content))
 	}
 
 	// Add tool calls if any
@@ -225,9 +227,31 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 
 	// Add observation images if any
 	if len(as.ObservationImages) > 0 {
-		// Handle images - simplified for now
-		imageMessage := NewMessage(models.RoleUser, "Observation images:")
-		// TODO: Set images properly when image handling is implemented
+		// Create content array with text and images
+		content := []map[string]interface{}{
+			{
+				"type": "text",
+				"text": "Observation images:",
+			},
+		}
+		
+		// Add each image to content
+		for _, img := range as.ObservationImages {
+			if img.Type == models.MediaTypeImage && img.ImageURL != nil {
+				content = append(content, map[string]interface{}{
+					"type": "image_url",
+					"image_url": map[string]interface{}{
+						"url":    img.ImageURL.URL,
+						"detail": img.ImageURL.Detail,
+					},
+				})
+			}
+		}
+		
+		imageMessage := &Message{
+			Role:    models.RoleUser,
+			Content: content,
+		}
 		messages = append(messages, *imageMessage)
 	}
 
@@ -356,8 +380,14 @@ func (ps *PlanningStep) ToMessages(summaryMode bool) ([]Message, error) {
 		return []Message{}, nil
 	}
 
+	// Clean the plan content by removing <end_plan> tag
+	cleanPlan := ps.Plan
+	if idx := strings.Index(cleanPlan, "<end_plan>"); idx >= 0 {
+		cleanPlan = strings.TrimSpace(cleanPlan[:idx])
+	}
+
 	return []Message{
-		*NewMessage(models.RoleAssistant, ps.Plan),
+		*NewMessage(models.RoleAssistant, cleanPlan),
 		*NewMessage(models.RoleUser, "Now proceed and carry out this plan."),
 	}, nil
 }
@@ -396,12 +426,12 @@ func (ps *PlanningStep) ToDict() (map[string]interface{}, error) {
 // TaskStep represents the initial task given to the agent
 type TaskStep struct {
 	Task       string        `json:"task"`
-	TaskImages []interface{} `json:"task_images,omitempty"`
+	TaskImages []*models.MediaContent `json:"task_images,omitempty"`
 }
 
 // NewTaskStep creates a new task step
-func NewTaskStep(task string, images ...[]interface{}) *TaskStep {
-	var taskImages []interface{}
+func NewTaskStep(task string, images ...[]*models.MediaContent) *TaskStep {
+	var taskImages []*models.MediaContent
 	if len(images) > 0 {
 		taskImages = images[0]
 	}
@@ -419,27 +449,37 @@ func (ts *TaskStep) GetType() string {
 
 // ToMessages implements MemoryStep
 func (ts *TaskStep) ToMessages(summaryMode bool) ([]Message, error) {
-	content := []map[string]interface{}{
-		{
-			"type": "text",
-			"text": fmt.Sprintf("New task:\n%s", ts.Task),
-		},
-	}
-
 	// Add images if present
 	if len(ts.TaskImages) > 0 {
-		for _, img := range ts.TaskImages {
-			content = append(content, map[string]interface{}{
-				"type":  "image",
-				"image": img,
-			})
+		// Create content array with text and images
+		content := []map[string]interface{}{
+			{
+				"type": "text",
+				"text": fmt.Sprintf("New task:\n%s", ts.Task),
+			},
 		}
+		
+		// Add each image to content
+		for _, img := range ts.TaskImages {
+			if img.Type == models.MediaTypeImage && img.ImageURL != nil {
+				content = append(content, map[string]interface{}{
+					"type": "image_url",
+					"image_url": map[string]interface{}{
+						"url":    img.ImageURL.URL,
+						"detail": img.ImageURL.Detail,
+					},
+				})
+			}
+		}
+		
+		return []Message{{
+			Role:    models.RoleUser,
+			Content: content,
+		}}, nil
 	}
 
-	message := &Message{
-		Role:    models.RoleUser,
-		Content: content,
-	}
+	// Simple text-only message  
+	message := NewMessage(models.RoleUser, fmt.Sprintf("New task:\n%s", ts.Task))
 
 	return []Message{*message}, nil
 }
@@ -583,7 +623,23 @@ func (am *AgentMemory) WriteMemoryToMessages(summaryMode bool) ([]Message, error
 		messages = append(messages, stepMessages...)
 	}
 
-	return messages, nil
+	// Filter out any empty messages
+	var filteredMessages []Message
+	for _, msg := range messages {
+		// Check if message has any non-empty content
+		hasContent := false
+		for _, content := range msg.Content {
+			if text, ok := content["text"].(string); ok && text != "" {
+				hasContent = true
+				break
+			}
+		}
+		if hasContent || len(msg.ToolCalls) > 0 {
+			filteredMessages = append(filteredMessages, msg)
+		}
+	}
+
+	return filteredMessages, nil
 }
 
 // ToDict converts the agent memory to a dictionary representation

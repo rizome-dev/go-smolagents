@@ -193,7 +193,7 @@ func (re *RemoteExecutor) getNextServer() string {
 func (re *RemoteExecutor) GetCapabilities() map[string]interface{} {
 	return map[string]interface{}{
 		"type":           "remote",
-		"languages":      []string{"python", "javascript", "go", "rust", "cpp", "java"},
+		"languages":      []string{"go", "javascript", "rust", "cpp", "java"},
 		"distributed":    true,
 		"load_balancing": true,
 		"servers":        len(re.servers),
@@ -275,7 +275,7 @@ func NewRemoteExecutorPool(config map[string]interface{}) *RemoteExecutorPool {
 
 	// Initialize default executors if servers are provided
 	if servers, ok := config["default_servers"].([]string); ok {
-		for _, lang := range []string{"python", "javascript", "go", "rust"} {
+		for _, lang := range []string{"go", "javascript", "rust"} {
 			pool.executors[lang] = NewRemoteExecutor(servers, config)
 		}
 	}
@@ -386,7 +386,6 @@ func NewMockRemoteExecutionServer(port int) *MockRemoteExecutionServer {
 
 	// Create wrapper for Go executor to match interface
 	goWrapper := &GoExecutorWrapper{executor: goExecutor}
-	mock.executors["python"] = goWrapper
 	mock.executors["go"] = goWrapper
 
 	return mock
@@ -488,7 +487,7 @@ func (mrs *MockRemoteExecutionServer) handleHealth(w http.ResponseWriter, r *htt
 // handleCapabilities handles capabilities requests
 func (mrs *MockRemoteExecutionServer) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	capabilities := map[string]interface{}{
-		"languages": []string{"python", "go"},
+		"languages": []string{"go", "javascript"},
 		"features":  []string{"timeout", "environment", "files"},
 		"version":   "1.0.0",
 	}

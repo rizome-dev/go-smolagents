@@ -221,6 +221,22 @@ func (p *Parser) ExtractCode(text string) string {
 		return strings.Join(codes, "\n\n")
 	}
 
+	// Fallback to markdown pattern if no matches found (similar to Python implementation)
+	markdownPattern := `(?s)` + "```(?:go|golang)?\\s*\n(.*?)\n```"
+	markdownRe := regexp.MustCompile(markdownPattern)
+	markdownMatches := markdownRe.FindAllStringSubmatch(text, -1)
+	
+	if len(markdownMatches) > 0 {
+		// Join all markdown code blocks with newlines
+		var codes []string
+		for _, match := range markdownMatches {
+			if len(match) > 1 {
+				codes = append(codes, strings.TrimSpace(match[1]))
+			}
+		}
+		return strings.Join(codes, "\n\n")
+	}
+
 	// If no complete blocks found, check for incomplete blocks (missing closing tag)
 	// This handles cases where the LLM stops generating before the closing tag
 	openTag := p.codeBlockTags[0]
@@ -231,6 +247,27 @@ func (p *Parser) ExtractCode(text string) string {
 		code = strings.TrimSpace(code)
 		if code != "" {
 			return code
+		}
+	}
+
+	// Also check for incomplete markdown blocks
+	if idx := strings.LastIndex(text, "```"); idx >= 0 {
+		// Check if it's the start of a code block
+		afterTicks := text[idx+3:]
+		// Skip language identifier if present
+		lines := strings.Split(afterTicks, "\n")
+		if len(lines) > 0 {
+			firstLine := strings.TrimSpace(lines[0])
+			if firstLine == "go" || firstLine == "golang" || firstLine == "" {
+				// It's a code block start
+				if len(lines) > 1 {
+					code := strings.Join(lines[1:], "\n")
+					code = strings.TrimSpace(code)
+					if code != "" {
+						return code
+					}
+				}
+			}
 		}
 	}
 

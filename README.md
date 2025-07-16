@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-    token := os.Getenv("HF_API_TOKEN")
+    token := os.Getenv("HF_TOKEN")
     model := models.NewInferenceClientModel("Qwen/Qwen2.5-Coder-32B-Instruct", token)
     
     agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
@@ -94,7 +94,6 @@ default_tools.NewVisitWebpageTool()     // Web page content extraction
 
 // Code Execution
 default_tools.NewGoInterpreterTool()    // Sandboxed Go execution
-default_tools.NewPythonInterpreterTool() // Python code execution
 
 // Communication
 default_tools.NewSpeechToTextTool()     // Audio transcription
@@ -120,35 +119,9 @@ models.CreateModel(models.ModelTypeLiteLLM, "claude-3-sonnet", options)
 // AWS Bedrock
 models.CreateModel(models.ModelTypeBedrockModel, "anthropic.claude-v2", options)
 
-// Local models
-models.CreateModel(models.ModelTypeVLLM, "local-model", options)
-models.CreateModel(models.ModelTypeMLX, "mlx-model", options)
 ```
-
-## Examples
-
-### ReactCodeAgent Example
-```bash
-cd examples/react_code_agent
-export HF_API_TOKEN="your_token_here"
-go run main.go
-```
-
-The ReactCodeAgent demonstrates:
-- **ReAct Framework**: Thought → Code → Observation cycles
-- **Dynamic Parsing**: Extracts reasoning and code from LLM responses
-- **Sandboxed Execution**: Safe Go code execution with security restrictions
-- **Planning System**: Step-by-step reasoning for complex tasks
-- **YAML Prompts**: Customizable prompt templates for different behaviors
 
 ## Advanced Features
-
-### Multi-Agent Coordination
-```go
-// Create research manager with multiple workers
-manager, err := NewResearchManager(model, 3) // 3 worker agents
-report, err := manager.ResearchProject("quantum computing", 15*time.Minute)
-```
 
 ### Remote Execution
 ```go
@@ -177,7 +150,7 @@ memory := memory.NewConversationMemory()
 agent.SetMemory(memory)
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests

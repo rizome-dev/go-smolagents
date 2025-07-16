@@ -317,7 +317,7 @@ func _() {
 			// Handle := and = assignments
 			for _, lhs := range x.Lhs {
 				if ident, ok := lhs.(*ast.Ident); ok {
-					if ident.Name != "_" && ident.Name != "result" && ident.Name != "err" {
+					if ident.Name != "_" {
 						if !existingVars[ident.Name] && !foundVars[ident.Name] {
 							foundVars[ident.Name] = true
 							newVars = append(newVars, ident.Name)
@@ -331,7 +331,7 @@ func _() {
 				for _, spec := range genDecl.Specs {
 					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 						for _, name := range valueSpec.Names {
-							if name.Name != "_" && name.Name != "result" && name.Name != "err" {
+							if name.Name != "_" {
 								if !existingVars[name.Name] && !foundVars[name.Name] {
 									foundVars[name.Name] = true
 									newVars = append(newVars, name.Name)
@@ -470,8 +470,11 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 					lines[i] = matches[1] + wrappedRhs
 				} else if regexp.MustCompile(fmt.Sprintf(`\b%s\s*[+\-*/%%<>=]`, varName)).MatchString(line) ||
 				           regexp.MustCompile(fmt.Sprintf(`[+\-*/%%<>=]\s*%s\b`, varName)).MatchString(line) {
-					// Not an assignment, wrap all occurrences
-					lines[i] = regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName)).ReplaceAllString(line, convFunc+"("+varName+")")
+					// Not an assignment, wrap all occurrences EXCEPT in Printf/Sprintf calls
+					// Skip if this line contains Printf, Sprintf, Fprintf, etc.
+					if !strings.Contains(line, "Printf") && !strings.Contains(line, "Sprintf") && !strings.Contains(line, "Fprintf") {
+						lines[i] = regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName)).ReplaceAllString(line, convFunc+"("+varName+")")
+					}
 				}
 			}
 		}
@@ -724,10 +727,6 @@ func main() {
 		}
 	}()
 	
-	var result interface{}
-	var err error
-	_ = err // Suppress unused variable error
-	
 	// User code starts here
 	%s
 	// User code ends here
@@ -735,9 +734,15 @@ func main() {
 	// Capture variables state
 	variables := getCurrentVariables()
 	
+	// Determine the result value
+	var outputResult interface{}
+	if val, exists := variables["result"]; exists {
+		outputResult = val
+	}
+	
 	// Output result
 	output := map[string]interface{}{
-		"result": result,
+		"result": outputResult,
 		"variables": variables,
 		"is_final_answer": false,
 		"logs": printBuffer.String(),

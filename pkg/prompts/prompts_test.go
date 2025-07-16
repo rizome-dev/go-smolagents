@@ -97,7 +97,7 @@ func TestPromptBuilder(t *testing.T) {
 
 	builder := NewPromptBuilder(tmpl).
 		WithVariable("task", "Write a hello world program").
-		WithVariable("tool_descriptions", "- python: Execute Python code").
+		WithVariable("tool_descriptions", "- go_interpreter: Execute Go code").
 		WithVariable("memory", "")
 
 	// Test building system prompt

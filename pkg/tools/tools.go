@@ -1,8 +1,7 @@
 // Package tools provides the tool system for smolagents.
 //
 // This includes the core Tool interface, base implementations, input validation,
-// type conversion, serialization, and integration capabilities. It maintains
-// 1-to-1 parity with the Python smolagents tools module.
+// type conversion, serialization, and integration capabilities.
 package tools
 
 import (

@@ -1,12 +1,12 @@
-// Package smolagents provides a Go implementation of the smolagents AI agent framework.
+// Package smolagents provides a Go implementation of an AI agent framework.
 //
-// This is a 1-to-1 port of the Python smolagents library, maintaining exact
-// compatibility with the original API while leveraging Go's type system and conventions.
+// This library offers a comprehensive framework for building AI agents with
+// advanced reasoning capabilities, leveraging Go's type system and conventions.
 //
 // The library provides:
 // - Multi-step AI agents using the ReAct framework
 // - Tool calling agents for function-based interactions
-// - Code execution agents with Python interpreter
+// - Code execution agents with sandboxed Go interpreter
 // - Comprehensive tool ecosystem
 // - Memory management for conversation history
 // - Model abstractions for different LLM backends
@@ -59,7 +59,6 @@ type (
 
 // Default tools - types will be added when default_tools package is implemented
 // type (
-//	PythonInterpreterTool = default_tools.PythonInterpreterTool
 //	FinalAnswerTool       = default_tools.FinalAnswerTool
 //	WebSearchTool         = default_tools.WebSearchTool
 //	VisitWebpageTool      = default_tools.VisitWebpageTool
@@ -93,8 +92,6 @@ type (
 	AzureOpenAIServerModel = models.AzureOpenAIServerModel
 	LiteLLMModel           = models.LiteLLMModel
 	AmazonBedrockModel     = models.AmazonBedrockModel
-	MLXModel               = models.MLXModel
-	VLLMModel              = models.VLLMModel
 	TransformersModel      = models.TransformersModel
 
 	// Structured generation types
@@ -148,7 +145,6 @@ var (
 	// NewToolCollection      = tools.NewToolCollection
 
 	// Default tool constructors - will be added when default_tools package is implemented
-	// NewPythonInterpreter   = default_tools.NewPythonInterpreterTool
 	// NewFinalAnswer         = default_tools.NewFinalAnswerTool
 	// NewWebSearch           = default_tools.NewWebSearchTool
 	// NewVisitWebpage        = default_tools.NewVisitWebpageTool
@@ -164,8 +160,6 @@ var (
 	NewAzureOpenAIServerModel  = models.NewAzureOpenAIServerModel
 	NewLiteLLMModel            = models.NewLiteLLMModel
 	NewAmazonBedrockModel      = models.NewAmazonBedrockModel
-	NewMLXModel                = models.NewMLXModel
-	NewVLLMModel               = models.NewVLLMModel
 	NewTransformersModel       = models.NewTransformersModelImpl
 	CreateModel                = models.CreateModel
 	AutoDetectModelType        = models.AutoDetectModelType

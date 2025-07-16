@@ -365,7 +365,14 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 
 	debugMode := os.Getenv("SMOLAGENTS_DEBUG") == "true"
 	if debugMode {
+		fmt.Printf("[DEBUG] Request to: %s\n", icm.BaseURL)
 		fmt.Printf("[DEBUG] Request payload size: %d bytes\n", len(jsonData))
+		// Log first 500 chars of request for debugging
+		if len(jsonData) > 500 {
+			fmt.Printf("[DEBUG] Request preview: %s...\n", string(jsonData[:500]))
+		} else {
+			fmt.Printf("[DEBUG] Request: %s\n", string(jsonData))
+		}
 	}
 
 	req, err := http.NewRequest("POST", icm.BaseURL, bytes.NewBuffer(jsonData))
@@ -387,11 +394,21 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
+	
+	if debugMode {
+		fmt.Printf("[DEBUG] Sending HTTP request at %s...\n", time.Now().Format("15:04:05.000"))
+	}
+	
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if debugMode {
+		fmt.Printf("[DEBUG] Received response at %s\n", time.Now().Format("15:04:05.000"))
+		fmt.Printf("[DEBUG] Response status: %d\n", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -399,7 +416,7 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 	}
 
 	if debugMode {
-		fmt.Printf("[DEBUG] Response status: %d, body size: %d bytes\n", resp.StatusCode, len(body))
+		fmt.Printf("[DEBUG] Response body size: %d bytes\n", len(body))
 	}
 
 	if resp.StatusCode >= 400 {
@@ -543,6 +560,16 @@ func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) 
 	// Create ChatMessage from the message data
 	role, _ := messageData["role"].(string)
 	content, _ := messageData["content"].(string)
+	
+	// Check for reasoning_content if content is empty (Kimi model specific)
+	if content == "" {
+		if reasoningContent, ok := messageData["reasoning_content"].(string); ok && reasoningContent != "" {
+			content = reasoningContent
+			if debugMode {
+				fmt.Printf("[DEBUG] Using reasoning_content field for Kimi model (length: %d)\n", len(content))
+			}
+		}
+	}
 
 	// Validate content is not empty
 	if content == "" {

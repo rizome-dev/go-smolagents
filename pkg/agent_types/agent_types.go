@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"io"
 	"log"
@@ -128,9 +129,24 @@ func (ai *AgentImage) ToRaw() interface{} {
 
 	if ai.tensor != nil {
 		// Handle tensor conversion if needed
-		// This would require additional dependencies for tensor operations
-		log.Printf("Tensor to image conversion not implemented")
-		return nil
+		// For now, we'll support basic float32/float64 arrays
+		switch t := ai.tensor.(type) {
+		case [][]float32:
+			return ai.tensorToImage(t)
+		case [][]float64:
+			// Convert to float32
+			float32Array := make([][]float32, len(t))
+			for i := range t {
+				float32Array[i] = make([]float32, len(t[i]))
+				for j := range t[i] {
+					float32Array[i][j] = float32(t[i][j])
+				}
+			}
+			return ai.tensorToImage(float32Array)
+		default:
+			log.Printf("Unsupported tensor type for image conversion: %T", t)
+			return nil
+		}
 	}
 
 	return nil
@@ -165,8 +181,12 @@ func (ai *AgentImage) ToString() string {
 	}
 
 	if ai.tensor != nil {
-		// Handle tensor to image conversion and save
-		log.Printf("Tensor to image conversion not implemented")
+		// Convert tensor to image first
+		rawImg := ai.ToRaw()
+		if img, ok := rawImg.(image.Image); ok && img != nil {
+			ai.rawImg = img
+			return ai.ToString() // Recursive call to save the image
+		}
 		return ""
 	}
 
@@ -203,6 +223,39 @@ func (ai *AgentImage) generateID() string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return fmt.Sprintf("%x", bytes)
+}
+
+// tensorToImage converts a 2D float32 array to an image
+func (ai *AgentImage) tensorToImage(tensor [][]float32) image.Image {
+	if len(tensor) == 0 || len(tensor[0]) == 0 {
+		return nil
+	}
+	
+	height := len(tensor)
+	width := len(tensor[0])
+	
+	// Create a new grayscale image
+	img := image.NewGray(image.Rect(0, 0, width, height))
+	
+	// Convert tensor values to pixel values
+	// Following Python implementation: (255 - array * 255)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// Clamp value between 0 and 1
+			val := tensor[y][x]
+			if val < 0 {
+				val = 0
+			} else if val > 1 {
+				val = 1
+			}
+			
+			// Convert to uint8 (0-255)
+			pixelValue := uint8((1 - val) * 255)
+			img.SetGray(x, y, color.Gray{pixelValue})
+		}
+	}
+	
+	return img
 }
 
 // AgentAudio represents audio type returned by the agent
@@ -254,7 +307,11 @@ func (aa *AgentAudio) ToRaw() interface{} {
 
 	if aa.path != "" {
 		// Load audio file - this would require additional audio processing libraries
-		log.Printf("Audio file loading not implemented for path: %s", aa.path)
+		// For full implementation, we would need to:
+		// 1. Read WAV/MP3/other audio formats
+		// 2. Extract PCM samples
+		// 3. Convert to tensor format
+		log.Printf("Audio file loading not implemented for path: %s - would require audio processing libraries", aa.path)
 		return nil
 	}
 
@@ -273,8 +330,12 @@ func (aa *AgentAudio) ToString() string {
 		filename := fmt.Sprintf("agent_audio_%s.wav", aa.generateID())
 		aa.path = filepath.Join(tempDir, filename)
 
-		// Audio encoding would require additional libraries
-		log.Printf("Audio tensor to file conversion not implemented")
+		// Audio encoding would require additional libraries like go-audio or similar
+		// For full implementation, we would need to:
+		// 1. Convert tensor data to PCM samples
+		// 2. Write WAV header with proper sample rate
+		// 3. Save to file
+		log.Printf("Audio tensor to file conversion not implemented - would require audio processing libraries")
 		return aa.path
 	}
 

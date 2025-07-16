@@ -194,35 +194,27 @@ func TruncateContent(content string, maxLength int) string {
 	return content[:maxLength-3] + "..."
 }
 
-// IsValidName checks if a string is a valid Python identifier
+// IsValidName checks if a string is a valid Go identifier
 func IsValidName(name string) bool {
 	if name == "" {
 		return false
 	}
 
-	// Check if it's a valid Go identifier (similar rules to Python)
+	// Check if it's a valid Go identifier
 	if !token.IsIdentifier(name) {
 		return false
 	}
 
-	// Additional Python-specific checks
-	if strings.Contains(name, "__") && (strings.HasPrefix(name, "__") || strings.HasSuffix(name, "__")) {
-		// Allow dunder methods
-		return true
+	// Check for Go keywords
+	goKeywords := map[string]bool{
+		"break": true, "case": true, "chan": true, "const": true, "continue": true,
+		"default": true, "defer": true, "else": true, "fallthrough": true, "for": true,
+		"func": true, "go": true, "goto": true, "if": true, "import": true,
+		"interface": true, "map": true, "package": true, "range": true, "return": true,
+		"select": true, "struct": true, "switch": true, "type": true, "var": true,
 	}
 
-	// Check for Python keywords (basic set)
-	pythonKeywords := map[string]bool{
-		"False": true, "None": true, "True": true, "and": true, "as": true,
-		"assert": true, "break": true, "class": true, "continue": true, "def": true,
-		"del": true, "elif": true, "else": true, "except": true, "finally": true,
-		"for": true, "from": true, "global": true, "if": true, "import": true,
-		"in": true, "is": true, "lambda": true, "nonlocal": true, "not": true,
-		"or": true, "pass": true, "raise": true, "return": true, "try": true,
-		"while": true, "with": true, "yield": true,
-	}
-
-	return !pythonKeywords[name]
+	return !goKeywords[name]
 }
 
 // MakeJSONSerializable converts an object to a JSON-serializable format

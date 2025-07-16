@@ -57,7 +57,7 @@ cd examples/react_code_agent && go build -o react_code_agent
 
 ## Architecture Overview
 
-This is a Go port of the Python smolagents library that provides a framework for building AI agents. The codebase follows a modular architecture:
+This is a Go implementation of an AI agent framework inspired by smolagents. The codebase follows a modular architecture:
 
 **Core Package Structure:**
 - `pkg/smolagents.go` - Main package exports and re-exports from sub-packages
@@ -86,8 +86,6 @@ This is a Go port of the Python smolagents library that provides a framework for
   - OpenAI API and compatible servers (`openai_server.go`)
   - AWS Bedrock (`bedrock_model.go`)
   - LiteLLM proxy (`litellm_model.go`)
-  - MLX models (`mlx_model.go`)
-  - vLLM servers (`vllm_model.go`)
 - Messages follow standardized `Message`/`ChatMessage` types
 - Multimodal support for vision models (`multimodal.go`)
 - Structured generation support for constrained outputs
@@ -102,7 +100,7 @@ This is a Go port of the Python smolagents library that provides a framework for
 - Go 1.23.4+ (per go.mod)
 - At least one model API key:
   - `OPENAI_API_KEY` for OpenAI models (recommended)
-  - `HF_API_TOKEN` for HuggingFace models
+  - `HF_TOKEN` for HuggingFace models
   - AWS credentials for Bedrock models
 - Optional API keys for enhanced functionality:
   - `SERP_API_KEY` for Google search via SerpAPI

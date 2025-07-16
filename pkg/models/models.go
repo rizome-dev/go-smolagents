@@ -1,8 +1,7 @@
 // Package models provides interfaces and implementations for different LLM backends.
 //
 // This includes local models, API-based models, and utilities for message processing,
-// tool calling, and structured generation. It maintains 1-to-1 parity with the
-// Python smolagents models module.
+// tool calling, and structured generation.
 package models
 
 import (
@@ -46,6 +45,12 @@ var ToolRoleConversions = map[MessageRole]MessageRole{
 // StructuredGenerationProviders lists providers that support structured generation
 var StructuredGenerationProviders = []string{"cerebras", "fireworks-ai"}
 
+// ModelsWithoutStopSequences lists models that don't support stop sequences parameter
+var ModelsWithoutStopSequences = []string{
+	"moonshotai/Kimi-K2-Instruct",
+	// Add other models here as needed
+}
+
 // CodeAgentResponseFormat defines the JSON schema for code agent responses
 var CodeAgentResponseFormat = &ResponseFormat{
 	Type: "json_schema",
@@ -63,7 +68,7 @@ var CodeAgentResponseFormat = &ResponseFormat{
 				},
 				"code": map[string]interface{}{
 					"type":        "string",
-					"description": "Valid Python code snippet implementing the thought.",
+					"description": "Valid Go code snippet implementing the thought.",
 					"title":       "Code",
 				},
 			},
@@ -471,7 +476,7 @@ func (bm *BaseModel) PrepareCompletionKwargs(
 		if options.Seed != nil {
 			kwargs["seed"] = *options.Seed
 		}
-		if len(options.StopSequences) > 0 {
+		if len(options.StopSequences) > 0 && SupportsStopParameter(bm.ModelID) {
 			kwargs["stop"] = options.StopSequences
 		}
 
@@ -773,6 +778,13 @@ func SupportsStopParameter(modelID string) bool {
 		}
 	}
 
+	// Check if the model is in the list of models without stop sequences
+	for _, model := range ModelsWithoutStopSequences {
+		if modelID == model {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -785,8 +797,6 @@ const (
 	ModelTypeAzureOpenAI     ModelType = "azure_openai"
 	ModelTypeLiteLLM         ModelType = "litellm"
 	ModelTypeBedrockModel    ModelType = "bedrock"
-	ModelTypeMLX             ModelType = "mlx"
-	ModelTypeVLLM            ModelType = "vllm"
 	ModelTypeTransformers    ModelType = "transformers"
 )
 
@@ -809,10 +819,6 @@ func CreateModel(modelType ModelType, modelID string, options map[string]interfa
 		return NewLiteLLMModel(modelID, options), nil
 	case ModelTypeBedrockModel:
 		return NewAmazonBedrockModel(modelID, options), nil
-	case ModelTypeMLX:
-		return NewMLXModel(modelID, options), nil
-	case ModelTypeVLLM:
-		return NewVLLMModel(modelID, options), nil
 	case ModelTypeTransformers:
 		return NewTransformersModelImpl(modelID, options), nil
 	default:
@@ -825,12 +831,6 @@ func AutoDetectModelType(modelID string) ModelType {
 	// Check for specific model patterns
 	if strings.Contains(modelID, "bedrock/") || IsSupportedBedrockModel(modelID) {
 		return ModelTypeBedrockModel
-	}
-	if strings.HasPrefix(modelID, "mlx-community/") || SupportsMLXModel(modelID) {
-		return ModelTypeMLX
-	}
-	if SupportsVLLMModel(modelID) {
-		return ModelTypeVLLM
 	}
 
 	// Default to inference client for HuggingFace models
@@ -860,14 +860,6 @@ func ValidateModelConfiguration(modelType ModelType, modelID string, options map
 		if !IsSupportedBedrockModel(modelID) {
 			return fmt.Errorf("model %s is not supported by Bedrock", modelID)
 		}
-	case ModelTypeMLX:
-		if !SupportsMLXModel(modelID) {
-			return fmt.Errorf("model %s is not supported by MLX", modelID)
-		}
-	case ModelTypeVLLM:
-		if !SupportsVLLMModel(modelID) {
-			return fmt.Errorf("model %s is not supported by vLLM", modelID)
-		}
 	}
 
 	return nil
@@ -885,10 +877,6 @@ func GetModelInfo(modelType ModelType, modelID string) map[string]interface{} {
 		if defaults := GetBedrockModelDefaults(modelID); defaults != nil {
 			info["defaults"] = defaults
 		}
-	case ModelTypeMLX:
-		info["defaults"] = GetMLXModelDefaults()
-	case ModelTypeVLLM:
-		info["defaults"] = GetVLLMModelDefaults()
 	}
 
 	return info

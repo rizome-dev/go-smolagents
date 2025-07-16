@@ -1,8 +1,7 @@
 // Package default_tools provides built-in tools for smolagents.
 //
-// This includes core tools like PythonInterpreter, WebSearch, FinalAnswer,
-// and other essential tools that agents commonly use. It maintains 1-to-1
-// parity with the Python smolagents default_tools module.
+// This includes core tools like GoInterpreter, WebSearch, FinalAnswer,
+// and other essential tools that agents commonly use.
 package default_tools
 
 import (
@@ -15,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -39,7 +37,6 @@ var BaseBuiltinPackages = []string{
 // ToolMapping maps tool names to their constructor functions
 var ToolMapping = map[string]func() tools.Tool{
 	"go_interpreter":     func() tools.Tool { return NewGoInterpreterTool() },
-	"python_interpreter": func() tools.Tool { return NewPythonInterpreterTool() },
 	"final_answer":       func() tools.Tool { return NewFinalAnswerTool() },
 	"user_input":         func() tools.Tool { return NewUserInputTool() },
 	"web_search":         func() tools.Tool { return NewWebSearchTool() },
@@ -735,76 +732,6 @@ func GetToolByName(name string) (tools.Tool, error) {
 	return constructor(), nil
 }
 
-// PythonInterpreterTool executes Python code
-type PythonInterpreterTool struct {
-	*tools.BaseTool
-	PythonPath string `json:"python_path"`
-}
-
-// NewPythonInterpreterTool creates a new Python interpreter tool
-func NewPythonInterpreterTool() *PythonInterpreterTool {
-	inputs := map[string]*tools.ToolInput{
-		"code": {
-			Type:        "string",
-			Description: "Python code to execute",
-			Nullable:    false,
-		},
-	}
-
-	tool := &PythonInterpreterTool{
-		BaseTool:   tools.NewBaseTool("python_interpreter", "Execute Python code", inputs, "string"),
-		PythonPath: "python3", // Default to python3
-	}
-
-	tool.ForwardFunc = tool.forward
-	return tool
-}
-
-func (pit *PythonInterpreterTool) forward(args ...interface{}) (interface{}, error) {
-	if len(args) == 0 {
-		return nil, fmt.Errorf("code parameter is required")
-	}
-
-	code, ok := args[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("code must be a string")
-	}
-
-	return pit.executePython(code)
-}
-
-func (pit *PythonInterpreterTool) executePython(code string) (string, error) {
-	// Create a temporary Python script
-	cmd := exec.Command(pit.PythonPath, "-c", code)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// Set timeout for execution
-	timer := time.AfterFunc(30*time.Second, func() {
-		cmd.Process.Kill()
-	})
-	defer timer.Stop()
-
-	err := cmd.Run()
-
-	output := stdout.String()
-	errOutput := stderr.String()
-
-	if err != nil {
-		if errOutput != "" {
-			return "", fmt.Errorf("Python execution error: %s", errOutput)
-		}
-		return "", fmt.Errorf("Python execution failed: %w", err)
-	}
-
-	if errOutput != "" && output == "" {
-		return errOutput, nil
-	}
-
-	return output, nil
-}
 
 // DuckDuckGoSearchTool performs web searches using DuckDuckGo
 type DuckDuckGoSearchTool struct {
@@ -1200,7 +1127,7 @@ func NewPipelineTool() *PipelineTool {
 		BaseTool:     tools.NewBaseTool("pipeline_tool", "Execute HuggingFace transformers pipelines", inputs, "string"),
 		PipelineType: "text-generation",
 		ModelName:    "gpt2",
-		APIKey:       os.Getenv("HF_API_TOKEN"),
+		APIKey:       os.Getenv("HF_TOKEN"),
 	}
 
 	tool.ForwardFunc = tool.forward
