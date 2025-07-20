@@ -19,26 +19,53 @@ contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 package main
 
 import (
-    "fmt"
-    "os"
-    "github.com/rizome-dev/go-smolagents/pkg/agents"
-    "github.com/rizome-dev/go-smolagents/pkg/models"
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/rizome-dev/go-smolagents/pkg/agents"
+	"github.com/rizome-dev/go-smolagents/pkg/models"
 )
 
 func main() {
-    token := os.Getenv("HF_TOKEN")
-    model := models.NewInferenceClientModel("Qwen/Qwen2.5-Coder-32B-Instruct", token)
-    
-    agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
-    if err != nil {
-        panic(err)
-    }
-    
+	// Get HuggingFace API token from environment
+	token := os.Getenv("HF_TOKEN")
+	if token == "" {
+		log.Fatal("Please set HF_TOKEN environment variable")
+	}
+
+	// Create model with explicit provider
+	model := models.NewInferenceClientModel(
+		"moonshotai/Kimi-K2-Instruct",
+		token,
+		map[string]interface{}{
+		},
+	)
+
+	// Create ReactCodeAgent with default options
+	agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
+	if err != nil {
+		log.Fatalf("Failed to create agent: %v", err)
+	}
+	defer agent.Close()
+
+    // Run the agent with a longer timeout
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
     result, err := agent.Run(&agents.RunOptions{
-        Task: "Calculate the factorial of 10",
+        Task:    "What is 5 factorial?",
+        Context: ctx,
     })
-    
-    fmt.Printf("Result: %v\n", result.Output)
+    cancel()
+
+    if err != nil {
+        fmt.Printf("\nError: %v\n", err)
+        if result != nil {
+            fmt.Printf("Status: %s\n", result.State)
+            fmt.Printf("Steps taken: %d\n", result.StepCount)
+        }
+    }
 }
 ```
 
