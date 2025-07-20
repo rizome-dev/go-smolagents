@@ -76,6 +76,7 @@ func main() {
 	customOptions := &agents.ReactCodeAgentOptions{
 		AuthorizedPackages: []string{"fmt", "math", "strings", "time"},
 		CodeBlockTags:      [2]string{"```go", "```"},
+		MaxCodeLength:      100000, // Support up to ~1000 lines of code
 		MaxSteps:           20,
 		EnablePlanning:     true,
 		PlanningInterval:   5,

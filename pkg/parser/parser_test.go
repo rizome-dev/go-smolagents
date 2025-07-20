@@ -278,7 +278,7 @@ Action: {"name": "web_search", "arguments": "Python tutorials"}`,
 			input: `<code>
 final_answer("The result is 42")
 </code>`,
-			expectedType: "final_answer",
+			expectedType: "code", // Code blocks are always parsed as code type
 			checkResult: func(result *ParseResult) bool {
 				return strings.Contains(result.Content, "final_answer")
 			},

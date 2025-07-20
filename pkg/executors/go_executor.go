@@ -348,6 +348,87 @@ func _() {
 	return newVars, nil
 }
 
+// transformFunctionVariables handles all function variable declarations,
+// converting them from "name := func" to "var name func; name = func" format
+func (ge *GoExecutor) transformFunctionVariables(code string) string {
+	// More flexible pattern to match function declarations with multiline support
+	// This will match: funcName := func(params) returnType {
+	funcPattern := regexp.MustCompile(`(?ms)^(\s*)(\w+)\s*:=\s*func\s*\((.*?)\)\s*(.*?)\s*\{`)
+	
+	// Find all matches with their positions
+	allMatches := funcPattern.FindAllStringSubmatchIndex(code, -1)
+	
+	// Process in reverse order to avoid position shifts
+	for i := len(allMatches) - 1; i >= 0; i-- {
+		match := funcPattern.FindStringSubmatch(code[allMatches[i][0]:])
+		if len(match) < 5 {
+			continue
+		}
+		
+		indent := match[1]
+		funcName := match[2]
+		params := match[3]
+		returnType := strings.TrimSpace(match[4])
+		
+		// Find the matching closing brace for this function
+		startPos := allMatches[i][0]
+		braceCount := 0
+		inString := false
+		escapeNext := false
+		funcEnd := startPos
+		
+		for j := startPos; j < len(code); j++ {
+			if escapeNext {
+				escapeNext = false
+				continue
+			}
+			
+			switch code[j] {
+			case '\\':
+				if inString {
+					escapeNext = true
+				}
+			case '"':
+				if !inString {
+					inString = true
+				} else {
+					inString = false
+				}
+			case '{':
+				if !inString {
+					braceCount++
+				}
+			case '}':
+				if !inString {
+					braceCount--
+					if braceCount == 0 {
+						funcEnd = j + 1
+						break
+					}
+				}
+			}
+			
+			if funcEnd != startPos {
+				break
+			}
+		}
+		
+		// Transform ALL function declarations to var declaration format
+		// This ensures proper typing and allows recursive calls
+		oldDecl := fmt.Sprintf(`%s%s := func(%s) %s {`, indent, funcName, params, returnType)
+		// Use backticks to preserve actual newline
+		newDecl := fmt.Sprintf(`%svar %s func(%s) %s
+%s%s = func(%s) %s {`, 
+			indent, funcName, params, returnType,
+			indent, funcName, params, returnType)
+		
+		// Replace in the code
+		code = code[:startPos] + strings.Replace(code[startPos:], oldDecl, newDecl, 1)
+	}
+	
+	return code
+}
+
 // transformVariableDeclarations transforms := to = for already declared variables
 func (ge *GoExecutor) transformVariableDeclarations(code string, declaredVars map[string]bool) string {
 	// For now, use a simple regex-based approach
@@ -428,17 +509,33 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 			continue
 		}
 		
+		// Check if the variable is a function in the code
+		funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, varName))
+		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, varName))
+		if funcPattern.MatchString(code) || varFuncPattern.MatchString(code) {
+			// Skip function variables
+			continue
+		}
+		
 		// Determine the appropriate conversion function
 		var convFunc string
-		switch value.(type) {
+		switch v := value.(type) {
 		case int, int32, int64:
 			convFunc = "toInt"
 		case float64, float32:
-			convFunc = "toFloat64"
+			// Check if it's actually an integer stored as float64 (common with JSON)
+			if float64(int(v.(float64))) == v.(float64) {
+				convFunc = "toInt"
+			} else {
+				convFunc = "toFloat64"
+			}
 		case string:
 			convFunc = "toString"
 		case bool:
 			convFunc = "toBool"
+		case func(...interface{}) interface{}:
+			// Skip function types
+			continue
 		default:
 			continue
 		}
@@ -447,8 +544,19 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 		// Handle different types of assignments
 		lines := strings.Split(code, "\n")
 		for i, line := range lines {
-			// Skip for loop declarations
+			// Special handling for for loops
 			if strings.Contains(line, "for") && strings.Contains(line, ":=") {
+				// Handle for loop conditions that use existing variables
+				// Pattern: for i := start; i <= existingVar; i++ 
+				forLoopRegex := regexp.MustCompile(`^(\s*for\s+\w+\s*:=\s*[^;]+;\s*)([^;]+)(\s*;\s*[^{]+)(.*)$`)
+				if matches := forLoopRegex.FindStringSubmatch(line); len(matches) >= 4 {
+					condition := matches[2]
+					// Wrap the variable in the condition
+					if strings.Contains(condition, varName) {
+						wrappedCondition := regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName)).ReplaceAllString(condition, convFunc+"("+varName+")")
+						lines[i] = matches[1] + wrappedCondition + matches[3] + matches[4]
+					}
+				}
 				continue
 			}
 			
@@ -470,10 +578,24 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 					lines[i] = matches[1] + wrappedRhs
 				} else if regexp.MustCompile(fmt.Sprintf(`\b%s\s*[+\-*/%%<>=]`, varName)).MatchString(line) ||
 				           regexp.MustCompile(fmt.Sprintf(`[+\-*/%%<>=]\s*%s\b`, varName)).MatchString(line) {
-					// Not an assignment, wrap all occurrences EXCEPT in Printf/Sprintf calls
+					// Not an assignment, wrap all occurrences EXCEPT in Printf/Sprintf calls and function calls
 					// Skip if this line contains Printf, Sprintf, Fprintf, etc.
 					if !strings.Contains(line, "Printf") && !strings.Contains(line, "Sprintf") && !strings.Contains(line, "Fprintf") {
-						lines[i] = regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName)).ReplaceAllString(line, convFunc+"("+varName+")")
+						// Replace variable occurrences but not function calls
+						varPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName))
+						lines[i] = varPattern.ReplaceAllStringFunc(line, func(match string) string {
+							// Check if this match is followed by '(' (function call)
+							matchIndex := strings.Index(line, match)
+							if matchIndex >= 0 && matchIndex+len(match) < len(line) {
+								afterMatch := line[matchIndex+len(match):]
+								if strings.TrimSpace(afterMatch) != "" && strings.TrimSpace(afterMatch)[0] == '(' {
+									// This is a function call, don't wrap it
+									return match
+								}
+							}
+							// Not a function call, wrap it
+							return convFunc + "(" + match + ")"
+						})
 					}
 				}
 			}
@@ -568,7 +690,10 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 	// Extract new variables from the code
 	newVars, _ := ge.extractNewVariables(code)
 	
-	// Transform code first to fix variable declarations
+	// Transform function variables first
+	code = ge.transformFunctionVariables(code)
+	
+	// Transform code to fix variable declarations
 	declaredVars := make(map[string]bool)
 	for name := range ge.variables {
 		declaredVars[name] = true
@@ -585,9 +710,24 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		allVarsForWrapping[k] = v
 	}
 	// For new variables, we need to infer their type from initialization
+	// Look for patterns like "varName := intLiteral" to set proper default types
 	for _, varName := range newVars {
-		// Default to int for numeric literals
-		allVarsForWrapping[varName] = 0
+		// Check if the variable is initialized with a function
+		funcInitPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, varName))
+		if funcInitPattern.MatchString(code) {
+			// It's a function, skip it - don't add to wrapping
+			continue
+		}
+		
+		// Check if the variable is initialized with an integer literal
+		intInitPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*(\d+)\b`, varName))
+		if matches := intInitPattern.FindStringSubmatch(code); len(matches) > 1 {
+			// It's initialized with an integer literal, use int type
+			allVarsForWrapping[varName] = 0
+		} else {
+			// Default to int for loop variables or other cases
+			allVarsForWrapping[varName] = 0
+		}
 	}
 	transformedCode = ge.wrapArithmeticOperations(transformedCode, allVarsForWrapping)
 	
@@ -621,23 +761,77 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		}
 	}
 	
-	// Declare new variables as interface{} so they can hold any value
+	// Declare new variables with appropriate types
+	funcVarTypes := make(map[string]string)
 	for _, varName := range newVars {
-		variableDeclarations = append(variableDeclarations,
-			fmt.Sprintf("var %s interface{}", varName))
+		// Check if this is a function variable and extract its signature
+		// Check in the ORIGINAL code, not transformedCode, because transformations might have changed it
+		// Use (?s) flag to make . match newlines as well
+		funcPattern := regexp.MustCompile(fmt.Sprintf(`(?s)\b%s\s*:=\s*func\s*\((.*?)\)\s*(.*?)\s*\{`, regexp.QuoteMeta(varName)))
+		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`(?m)\bvar\s+%s\s+func\s*\((.*?)\)\s*(.*?)$`, regexp.QuoteMeta(varName)))
+		
+		isFuncVar := false
+		// Check both original code and transformed code
+		if funcPattern.MatchString(code) || funcPattern.MatchString(transformedCode) {
+			// It's a function variable, don't declare it as interface{}
+			isFuncVar = true
+			if matches := funcPattern.FindStringSubmatch(code); len(matches) > 2 {
+				params := matches[1]
+				returns := strings.TrimSpace(matches[2])
+				funcVarTypes[varName] = fmt.Sprintf("func(%s) %s", params, returns)
+			} else if matches := funcPattern.FindStringSubmatch(transformedCode); len(matches) > 2 {
+				params := matches[1]
+				returns := strings.TrimSpace(matches[2])
+				funcVarTypes[varName] = fmt.Sprintf("func(%s) %s", params, returns)
+			}
+		} else if varFuncPattern.MatchString(transformedCode) {
+			// It's a var declaration for a function
+			isFuncVar = true
+			if matches := varFuncPattern.FindStringSubmatch(transformedCode); len(matches) > 2 {
+				params := matches[1]
+				returns := strings.TrimSpace(matches[2])
+				funcVarTypes[varName] = fmt.Sprintf("func(%s) %s", params, returns)
+			}
+		}
+		
+		if !isFuncVar {
+			// Non-function variables as interface{}
+			variableDeclarations = append(variableDeclarations,
+				fmt.Sprintf("var %s interface{}", varName))
+		}
+		// Function variables don't need declaration at top level
 	}
 
-	// Build variable capture code for all variables
+	// Build variable capture code for all variables (excluding functions)
 	allVars := make([]string, 0, len(ge.variables)+len(newVars))
 	for name := range ge.variables {
 		allVars = append(allVars, name)
 	}
 	allVars = append(allVars, newVars...)
 	
+	// Use funcVarTypes to identify function variables to exclude from capture
+	funcVars := make(map[string]bool)
+	for _, varName := range allVars {
+		if _, isFunc := funcVarTypes[varName]; isFunc {
+			funcVars[varName] = true
+		} else {
+			// Also check existing variables that might be functions
+			funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, varName))
+			varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, varName))
+			// Also check if it's been transformed to var declaration
+			if funcPattern.MatchString(transformedCode) || varFuncPattern.MatchString(transformedCode) {
+				funcVars[varName] = true
+			}
+		}
+	}
+	
 	var variableCaptures []string
 	for _, name := range allVars {
-		variableCaptures = append(variableCaptures,
-			fmt.Sprintf(`"%s": %s`, name, name))
+		// Skip function variables as they can't be serialized
+		if !funcVars[name] {
+			variableCaptures = append(variableCaptures,
+				fmt.Sprintf(`"%s": %s`, name, name))
+		}
 	}
 	
 	// Handle empty variable captures to avoid syntax errors  

@@ -1,3 +1,6 @@
+.mcp.json
+.claude/
+
 # Binaries
 bin/
 *.exe

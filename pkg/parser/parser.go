@@ -106,14 +106,8 @@ func (p *Parser) Parse(response string) *ParseResult {
 			}
 		}
 
-		// Check if it's a final answer - be more flexible with detection
-		if isFinalAnswerCode(code) {
-			return &ParseResult{
-				Type:    "final_answer",
-				Thought: thought,
-				Content: code,
-			}
-		}
+		// Always treat code blocks as code that needs execution
+		// The final_answer() function will be handled during execution
 		return &ParseResult{
 			Type:    "code",
 			Thought: thought,
@@ -206,6 +200,7 @@ func (p *Parser) ExtractCode(text string) string {
 	pattern := fmt.Sprintf(`(?s)%s(.*?)%s`,
 		regexp.QuoteMeta(p.codeBlockTags[0]),
 		regexp.QuoteMeta(p.codeBlockTags[1]))
+
 
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(text, -1)

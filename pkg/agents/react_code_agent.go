@@ -55,7 +55,7 @@ func DefaultReactCodeAgentOptions() *ReactCodeAgentOptions {
 		CodeBlockTags:      [2]string{"<code>", "</code>"},
 		StreamOutputs:      true,
 		StructuredOutput:   false,
-		MaxCodeLength:      10000,
+		MaxCodeLength:      100000, // ~1000 lines * 100 chars/line
 		EnablePlanning:     true,
 		PlanningInterval:   5,
 		MaxSteps:           15,
@@ -135,6 +135,13 @@ func NewReactCodeAgent(
 		return nil, err
 	}
 
+	// Handle zero values for maxCodeLength
+	maxCodeLength := options.MaxCodeLength
+	if maxCodeLength == 0 {
+		// Default to 100k chars (approximately 1000 lines * 100 chars/line)
+		maxCodeLength = 100000
+	}
+
 	agent := &ReactCodeAgent{
 		BaseMultiStepAgent: baseAgent,
 		promptManager:      promptManager,
@@ -145,7 +152,7 @@ func NewReactCodeAgent(
 		codeBlockTags:      options.CodeBlockTags,
 		streamOutputs:      options.StreamOutputs,
 		structuredOutput:   options.StructuredOutput,
-		maxCodeLength:      options.MaxCodeLength,
+		maxCodeLength:      maxCodeLength,
 		enablePlanning:     options.EnablePlanning,
 		planningInterval:   options.PlanningInterval,
 		verbose:            options.Verbose,
