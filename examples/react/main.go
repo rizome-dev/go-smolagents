@@ -37,8 +37,7 @@ func main() {
 	model := models.NewInferenceClientModel(
 		"moonshotai/Kimi-K2-Instruct",
 		token,
-		map[string]interface{}{
-		},
+		map[string]interface{}{},
 	)
 
 	// Create ReactCodeAgent with default options

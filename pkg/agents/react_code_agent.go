@@ -224,13 +224,13 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	}
 	taskStep := memory.NewTaskStep(options.Task, taskImages)
 	rca.memory.AddStep(taskStep)
-	
+
 	// Determine max steps
 	maxSteps := rca.maxSteps
 	if options.MaxSteps != nil {
 		maxSteps = *options.MaxSteps
 	}
-	
+
 	// Display the task prominently
 	rca.display.Task(options.Task, fmt.Sprintf("Max steps: %d | Agent: ReactCodeAgent", maxSteps))
 
@@ -320,11 +320,11 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	// Display final summary
 	if result.State == "success" {
 		duration := time.Since(result.Timing.StartTime)
-		rca.display.Success(fmt.Sprintf("Task completed successfully in %d steps (%.2fs)", 
+		rca.display.Success(fmt.Sprintf("Task completed successfully in %d steps (%.2fs)",
 			result.StepCount, duration.Seconds()))
 	} else if result.State != "" {
 		duration := time.Since(result.Timing.StartTime)
-		rca.display.Info(fmt.Sprintf("Task ended with state: %s after %d steps (%.2fs)", 
+		rca.display.Info(fmt.Sprintf("Task ended with state: %s after %d steps (%.2fs)",
 			result.State, result.StepCount, duration.Seconds()))
 	}
 
@@ -436,10 +436,10 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 
 	// Build generation options
 	genOptions := &models.GenerateOptions{
-		MaxTokens:     func() *int { v := 2048; return &v }(),
-		Temperature:   func() *float64 { v := 0.3; return &v }(),
+		MaxTokens:   func() *int { v := 2048; return &v }(),
+		Temperature: func() *float64 { v := 0.3; return &v }(),
 	}
-	
+
 	// Only add stop sequences if the model supports them
 	if models.SupportsStopParameter(rca.model.GetModelID()) {
 		genOptions.StopSequences = stopSequences
@@ -510,7 +510,7 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 
 	if response.Content != nil {
 		step.ModelOutput = *response.Content
-		
+
 		// Clean response for models that don't respect stop sequences (e.g., Kimi)
 		// Remove any content after "Observation:" which should be system-generated
 		if idx := strings.Index(step.ModelOutput, "Observation:"); idx >= 0 {
@@ -523,7 +523,7 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 			response.Content = &cleanedContent
 		}
 	}
-	
+
 	step.ModelOutputMessage = &models.ChatMessage{
 		Role:    response.Role,
 		Content: response.Content,
@@ -588,7 +588,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 
 	// Parse the response with error recovery
 	parseResult := rca.responseParser.Parse(content)
-	
+
 	// If parsing completely failed, try to extract meaningful content
 	if parseResult == nil {
 		errMsg := "parser returned nil result"
@@ -602,12 +602,12 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 			Thought: extractThoughtFromRaw(content),
 		}
 	}
-	
+
 	// Always display the raw model output first (like Python's streaming display)
 	if rca.verbose && content != "" {
 		rca.display.ModelOutput(content)
 	}
-	
+
 	// Display the thought if present
 	if parseResult.Thought != "" {
 		rca.display.Thought(parseResult.Thought)
@@ -616,7 +616,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 
 	// Debug logging for parse result
 	if rca.verbose {
-		rca.display.Info(fmt.Sprintf("Parse result type: %s, has_content: %v, has_error: %v", 
+		rca.display.Info(fmt.Sprintf("Parse result type: %s, has_content: %v, has_error: %v",
 			parseResult.Type, parseResult.Content != "", parseResult.Error != nil))
 		if parseResult.Error != nil {
 			rca.display.Error(fmt.Errorf("Parse error: %v", parseResult.Error))
@@ -649,7 +649,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 			}
 			return rca.handleCodeExecution(ctx, step, codeResult)
 		}
-		
+
 		// Check for code blocks that might have been missed
 		if strings.Contains(content, rca.codeBlockTags[0]) {
 			if rca.verbose {
@@ -665,7 +665,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 				return rca.handleCodeExecution(ctx, step, codeResult)
 			}
 		}
-		
+
 		// Otherwise treat as observation/thinking
 		if rca.verbose {
 			rca.display.Info("Processing as raw thought/observation")
@@ -714,12 +714,12 @@ func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory
 	startTime := time.Now()
 	execResult, err := rca.goExecutor.ExecuteWithResult(code)
 	executionDuration := time.Since(startTime)
-	
+
 	// Display execution duration
 	if rca.verbose {
 		rca.display.Info(fmt.Sprintf("Execution time: %.3fs", executionDuration.Seconds()))
 	}
-	
+
 	if err != nil {
 		errMsg := fmt.Sprintf("Code execution error: %s", err.Error())
 		step.Observations = errMsg
@@ -747,16 +747,16 @@ func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory
 
 	// Format observation like Python: include both logs AND output
 	var observationParts []string
-	
+
 	// Always include execution status
 	observationParts = append(observationParts, "=== Code Execution ===")
-	
+
 	// Add execution logs if present
 	if execResult.Logs != "" {
 		observationParts = append(observationParts, "Execution logs:")
 		observationParts = append(observationParts, execResult.Logs)
 	}
-	
+
 	// Add output if present
 	if execResult.Output != nil {
 		outputStr := fmt.Sprintf("%v", execResult.Output)
@@ -769,15 +769,15 @@ func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory
 			observationParts = append(observationParts, outputStr)
 		}
 	}
-	
+
 	// If neither logs nor output, indicate success
 	if execResult.Logs == "" && execResult.Output == nil {
 		observationParts = append(observationParts, "Code executed successfully with no output")
 	}
-	
+
 	step.ActionOutput = execResult.Output
 	step.Observations = strings.Join(observationParts, "\n")
-	
+
 	// Display the full observation
 	rca.display.Observation(step.Observations)
 
@@ -805,7 +805,7 @@ func (rca *ReactCodeAgent) handleFinalAnswer(step *memory.ActionStep, parseResul
 
 	step.ActionOutput = finalAnswer
 	step.Observations = "Final answer provided"
-	
+
 	// Display the final answer
 	rca.display.FinalAnswer(finalAnswer)
 
@@ -820,7 +820,7 @@ func (rca *ReactCodeAgent) executePlanningStep(ctx context.Context) error {
 	// Display planning header
 	rca.display.Rule("Planning")
 	rca.display.Progress("Generating plan...")
-	
+
 	// Get task from memory
 	task := ""
 	steps := rca.memory.GetSteps()
@@ -860,10 +860,10 @@ func (rca *ReactCodeAgent) executePlanningStep(ctx context.Context) error {
 
 	// Generate planning response
 	genOptions := &models.GenerateOptions{
-		MaxTokens:      func() *int { v := 1024; return &v }(),
-		Temperature:    func() *float64 { v := 0.5; return &v }(),
+		MaxTokens:   func() *int { v := 1024; return &v }(),
+		Temperature: func() *float64 { v := 0.5; return &v }(),
 	}
-	
+
 	// Only add stop sequences if the model supports them
 	if models.SupportsStopParameter(rca.model.GetModelID()) {
 		genOptions.StopSequences = []string{"<end_plan>"}
@@ -915,7 +915,7 @@ func (rca *ReactCodeAgent) executePlanningStep(ctx context.Context) error {
 		response.TokenUsage,
 	)
 	step.Timing.End()
-	
+
 	rca.memory.AddStep(step)
 
 	return nil
@@ -977,20 +977,20 @@ func (rca *ReactCodeAgent) getMemoryString() string {
 			// Format like Python: include step number and all relevant info
 			stepInfo := fmt.Sprintf("=== Step %d ===", s.StepNumber)
 			parts = append(parts, stepInfo)
-			
+
 			if s.ModelOutput != "" {
 				parts = append(parts, fmt.Sprintf("Thought: %s", s.ModelOutput))
 			}
-			
+
 			// If we have observations that include code execution info, extract it
 			if strings.Contains(s.Observations, "=== Code Execution ===") {
 				// The code is already shown in the thought, so we don't need to duplicate it
 			}
-			
+
 			if s.Observations != "" {
 				parts = append(parts, fmt.Sprintf("Observation: %s", s.Observations))
 			}
-			
+
 			if s.Error != nil {
 				parts = append(parts, fmt.Sprintf("Error: %v", s.Error))
 			}
@@ -1081,7 +1081,7 @@ func (rca *ReactCodeAgent) RunStream(options *RunOptions) (<-chan *StreamStepRes
 				StepType:   "step_start",
 				Metadata: map[string]interface{}{
 					"step": stepNumber,
-			},
+				},
 			}
 
 			// Execute streaming step
@@ -1143,10 +1143,10 @@ func (rca *ReactCodeAgent) executeStreamingStep(stepNumber int, options *RunOpti
 	maxTokens := 2048
 	temperature := 0.7
 	genOptions := &models.GenerateOptions{
-		MaxTokens:     &maxTokens,
-		Temperature:   &temperature,
+		MaxTokens:   &maxTokens,
+		Temperature: &temperature,
 	}
-	
+
 	// Only add stop sequences if the model supports them
 	if models.SupportsStopParameter(rca.model.GetModelID()) {
 		stopSequences := []string{"Observation:"}
@@ -1163,7 +1163,7 @@ func (rca *ReactCodeAgent) executeStreamingStep(stepNumber int, options *RunOpti
 		for _, msg := range memoryMessages {
 			messages = append(messages, msg)
 		}
-		
+
 		// Stream model output
 		streamChan, err := rca.model.GenerateStream(messages, genOptions)
 		if err != nil {
@@ -1199,7 +1199,7 @@ func (rca *ReactCodeAgent) executeStreamingStep(stepNumber int, options *RunOpti
 		for _, msg := range memoryMessages {
 			messages = append(messages, msg)
 		}
-		
+
 		// Non-streaming execution
 		chatMessage, err := rca.model.Generate(messages, genOptions)
 		if err != nil {
@@ -1268,13 +1268,13 @@ func (rca *ReactCodeAgent) processParseResult(parseResult *parser.ParseResult, s
 			// Convert output to string
 			outputStr := fmt.Sprintf("%v", execResult.Output)
 			step.Observations = outputStr
-			
+
 			// Check for errors based on exit code or stderr
 			hasError := execResult.ExitCode != 0 || execResult.Stderr != ""
 			if hasError {
 				step.Error = fmt.Errorf("execution failed: %s", execResult.Stderr)
 			}
-			
+
 			// Send observation
 			resultChan <- &StreamStepResult{
 				StepNumber: step.StepNumber,
@@ -1286,7 +1286,7 @@ func (rca *ReactCodeAgent) processParseResult(parseResult *parser.ParseResult, s
 					"stderr":    execResult.Stderr,
 				},
 			}
-			
+
 			if execResult.IsFinalAnswer {
 				result.isFinalAnswer = true
 				result.output = execResult.FinalAnswer
@@ -1353,7 +1353,7 @@ func extractThoughtFromRaw(content string) string {
 		"Thought:", "Thinking:", "I need to", "I should", "Let me", "I'll", "I will",
 		"First,", "Next,", "Now,", "The task", "To solve", "To answer",
 	}
-	
+
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -1363,7 +1363,7 @@ func extractThoughtFromRaw(content string) string {
 			}
 		}
 	}
-	
+
 	// If no pattern found, return first non-empty line as thought
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -1371,7 +1371,7 @@ func extractThoughtFromRaw(content string) string {
 			return trimmed
 		}
 	}
-	
+
 	return ""
 }
 
@@ -1381,29 +1381,29 @@ func extractCodeFromRaw(content string) string {
 	lines := strings.Split(content, "\n")
 	var codeLines []string
 	inCode := false
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check for code indicators
-		if strings.Contains(line, "final_answer(") || 
-		   strings.Contains(line, "result =") ||
-		   strings.Contains(line, "fmt.") ||
-		   strings.Contains(line, ":=") {
+		if strings.Contains(line, "final_answer(") ||
+			strings.Contains(line, "result =") ||
+			strings.Contains(line, "fmt.") ||
+			strings.Contains(line, ":=") {
 			inCode = true
 		}
-		
+
 		if inCode {
 			// Stop at obvious non-code lines
 			if strings.HasPrefix(trimmed, "Thought:") ||
-			   strings.HasPrefix(trimmed, "Observation:") ||
-			   strings.HasPrefix(trimmed, "Error:") {
+				strings.HasPrefix(trimmed, "Observation:") ||
+				strings.HasPrefix(trimmed, "Error:") {
 				break
 			}
 			codeLines = append(codeLines, line)
 		}
 	}
-	
+
 	return strings.Join(codeLines, "\n")
 }
 
@@ -1414,12 +1414,12 @@ func extractCodeBetweenTags(content, openTag, closeTag string) string {
 		return ""
 	}
 	startIdx += len(openTag)
-	
+
 	endIdx := strings.Index(content[startIdx:], closeTag)
 	if endIdx == -1 {
 		// No closing tag, take rest of content
 		return strings.TrimSpace(content[startIdx:])
 	}
-	
+
 	return strings.TrimSpace(content[startIdx : startIdx+endIdx])
 }

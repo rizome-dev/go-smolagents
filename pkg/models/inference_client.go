@@ -34,7 +34,7 @@ func extractTextContent(msg map[string]interface{}) string {
 	if content, ok := msg["content"].(string); ok {
 		return content
 	}
-	
+
 	// Handle array of content items (new format)
 	if contentArray, ok := msg["content"].([]map[string]interface{}); ok {
 		var textParts []string
@@ -45,7 +45,7 @@ func extractTextContent(msg map[string]interface{}) string {
 		}
 		return strings.Join(textParts, " ")
 	}
-	
+
 	// Handle array of interface{} (in case of type variations)
 	if contentArray, ok := msg["content"].([]interface{}); ok {
 		var textParts []string
@@ -58,7 +58,7 @@ func extractTextContent(msg map[string]interface{}) string {
 		}
 		return strings.Join(textParts, " ")
 	}
-	
+
 	return ""
 }
 
@@ -397,22 +397,22 @@ func (icm *InferenceClientModel) callOpenAICompatibleAPI(kwargs map[string]inter
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", icm.Token))
-	
+
 	// Set provider header if specified
 	if icm.Provider != "" && icm.Provider != "auto" {
 		req.Header.Set("X-Provider", icm.Provider)
 	}
-	
+
 	for key, value := range icm.Headers {
 		req.Header.Set(key, value)
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	
+
 	if debugMode {
 		fmt.Printf("[DEBUG] Sending HTTP request at %s...\n", time.Now().Format("15:04:05.000"))
 	}
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
@@ -574,7 +574,7 @@ func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) 
 	// Create ChatMessage from the message data
 	role, _ := messageData["role"].(string)
 	content, _ := messageData["content"].(string)
-	
+
 	// Check for reasoning_content if content is empty (Kimi model specific)
 	if content == "" {
 		if reasoningContent, ok := messageData["reasoning_content"].(string); ok && reasoningContent != "" {
@@ -603,14 +603,14 @@ func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) 
 	if usage, ok := response["usage"].(map[string]interface{}); ok {
 		promptTokens := 0
 		completionTokens := 0
-		
+
 		if pt, ok := usage["prompt_tokens"].(float64); ok {
 			promptTokens = int(pt)
 		}
 		if ct, ok := usage["completion_tokens"].(float64); ok {
 			completionTokens = int(ct)
 		}
-		
+
 		if promptTokens > 0 || completionTokens > 0 {
 			message.TokenUsage = &monitoring.TokenUsage{
 				InputTokens:  promptTokens,
@@ -618,7 +618,7 @@ func (icm *InferenceClientModel) parseResponse(response map[string]interface{}) 
 				TotalTokens:  promptTokens + completionTokens,
 			}
 			if debugMode {
-				fmt.Printf("[DEBUG] Token usage - Input: %d, Output: %d, Total: %d\n", 
+				fmt.Printf("[DEBUG] Token usage - Input: %d, Output: %d, Total: %d\n",
 					promptTokens, completionTokens, promptTokens+completionTokens)
 			}
 		}

@@ -90,7 +90,7 @@ func (p *Parser) Parse(response string) *ParseResult {
 
 	// Try to extract code blocks first
 	code := p.ExtractCode(response)
-	
+
 	// Extract thought - either from explicit "Thought:" prefix or from text before code
 	thought := ""
 	if thoughtMatch := p.thoughtPattern.FindStringSubmatch(response); len(thoughtMatch) > 1 {
@@ -215,7 +215,6 @@ func (p *Parser) ExtractCode(text string) string {
 		regexp.QuoteMeta(p.codeBlockTags[0]),
 		regexp.QuoteMeta(p.codeBlockTags[1]))
 
-
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(text, -1)
 
@@ -234,7 +233,7 @@ func (p *Parser) ExtractCode(text string) string {
 	markdownPattern := `(?s)` + "```(?:go|golang)?\\s*\n(.*?)\n```"
 	markdownRe := regexp.MustCompile(markdownPattern)
 	markdownMatches := markdownRe.FindAllStringSubmatch(text, -1)
-	
+
 	if len(markdownMatches) > 0 {
 		// Join all markdown code blocks with newlines
 		var codes []string
@@ -419,7 +418,7 @@ func extractImplicitThought(text string) string {
 		"To solve", "To answer", "To complete",
 		"The task", "The problem", "The solution",
 	}
-	
+
 	lines := strings.Split(text, "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -429,7 +428,7 @@ func extractImplicitThought(text string) string {
 			}
 		}
 	}
-	
+
 	// Return first substantial line if no pattern found
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -437,7 +436,7 @@ func extractImplicitThought(text string) string {
 			return trimmed
 		}
 	}
-	
+
 	return ""
 }
 
@@ -463,7 +462,7 @@ func looksLikeFinalAnswer(text string) bool {
 		"final result:",
 		"answer:",
 	}
-	
+
 	for _, phrase := range finalAnswerPhrases {
 		if strings.Contains(lower, phrase) {
 			return true
@@ -482,14 +481,14 @@ func extractFinalAnswerText(text string) string {
 		"the result is",
 		"answer:",
 	}
-	
+
 	for _, marker := range markers {
 		if idx := strings.Index(lower, marker); idx >= 0 {
 			result := text[idx+len(marker):]
 			return strings.TrimSpace(result)
 		}
 	}
-	
+
 	return text
 }
 

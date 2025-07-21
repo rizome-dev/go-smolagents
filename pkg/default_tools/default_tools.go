@@ -50,17 +50,17 @@ var BaseBuiltinPackages = []string{
 
 // ToolMapping maps tool names to their constructor functions
 var ToolMapping = map[string]func() tools.Tool{
-	"go_interpreter":     func() tools.Tool { return NewGoInterpreterTool() },
-	"final_answer":       func() tools.Tool { return NewFinalAnswerTool() },
-	"user_input":         func() tools.Tool { return NewUserInputTool() },
-	"web_search":         func() tools.Tool { return NewWebSearchTool() },
-	"duckduckgo_search":  func() tools.Tool { return NewDuckDuckGoSearchTool() },
-	"google_search":      func() tools.Tool { return NewGoogleSearchTool() },
-	"visit_webpage":      func() tools.Tool { return NewVisitWebpageTool() },
-	"wikipedia_search":   func() tools.Tool { return NewWikipediaSearchTool() },
-	"speech_to_text":     func() tools.Tool { return NewSpeechToTextTool() },
-	"pipeline_tool":      func() tools.Tool { return NewPipelineTool() },
-	"vision_browser":     func() tools.Tool { return NewVisionBrowser() },
+	"go_interpreter":    func() tools.Tool { return NewGoInterpreterTool() },
+	"final_answer":      func() tools.Tool { return NewFinalAnswerTool() },
+	"user_input":        func() tools.Tool { return NewUserInputTool() },
+	"web_search":        func() tools.Tool { return NewWebSearchTool() },
+	"duckduckgo_search": func() tools.Tool { return NewDuckDuckGoSearchTool() },
+	"google_search":     func() tools.Tool { return NewGoogleSearchTool() },
+	"visit_webpage":     func() tools.Tool { return NewVisitWebpageTool() },
+	"wikipedia_search":  func() tools.Tool { return NewWikipediaSearchTool() },
+	"speech_to_text":    func() tools.Tool { return NewSpeechToTextTool() },
+	"pipeline_tool":     func() tools.Tool { return NewPipelineTool() },
+	"vision_browser":    func() tools.Tool { return NewVisionBrowser() },
 }
 
 // GoInterpreterTool evaluates Go code safely
@@ -745,7 +745,6 @@ func GetToolByName(name string) (tools.Tool, error) {
 
 	return constructor(), nil
 }
-
 
 // DuckDuckGoSearchTool performs web searches using DuckDuckGo
 type DuckDuckGoSearchTool struct {

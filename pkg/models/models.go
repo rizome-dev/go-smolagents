@@ -702,7 +702,7 @@ func extractMessageContent(msg map[string]interface{}) string {
 	if content, ok := msg["content"].(string); ok {
 		return content
 	}
-	
+
 	// Handle array of content items
 	if contentArray, ok := msg["content"].([]map[string]interface{}); ok {
 		var textParts []string
@@ -713,7 +713,7 @@ func extractMessageContent(msg map[string]interface{}) string {
 		}
 		return strings.Join(textParts, " ")
 	}
-	
+
 	// Handle array of interface{}
 	if contentArray, ok := msg["content"].([]interface{}); ok {
 		var textParts []string
@@ -726,7 +726,7 @@ func extractMessageContent(msg map[string]interface{}) string {
 		}
 		return strings.Join(textParts, " ")
 	}
-	
+
 	return ""
 }
 
@@ -766,7 +766,7 @@ func GetCleanMessageList(
 			lastMsg := result[len(result)-1]
 			lastContent := extractMessageContent(lastMsg)
 			currentContent := extractMessageContent(msgMap)
-			
+
 			if lastContent != "" && currentContent != "" {
 				// Create a new text content item with merged text
 				result[len(result)-1]["content"] = []map[string]interface{}{

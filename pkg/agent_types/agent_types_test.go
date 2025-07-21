@@ -59,7 +59,7 @@ func TestAgentImage_TensorToImage(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ai := &AgentImage{tensor: tt.tensor}
 			img := ai.ToRaw()
-			
+
 			if tt.want {
 				if img == nil {
 					t.Error("Expected image but got nil")
@@ -82,21 +82,21 @@ func TestAgentImage_TensorToImage_PixelValues(t *testing.T) {
 		{0.0, 1.0},  // Should become 255, 0
 		{0.5, 0.25}, // Should become 127, 191
 	}
-	
+
 	ai := &AgentImage{tensor: tensor}
 	rawImg := ai.ToRaw()
-	
+
 	img, ok := rawImg.(*image.Gray)
 	if !ok {
 		t.Fatalf("Expected *image.Gray but got %T", rawImg)
 	}
-	
+
 	// Check dimensions
 	bounds := img.Bounds()
 	if bounds.Dx() != 2 || bounds.Dy() != 2 {
 		t.Errorf("Expected 2x2 image but got %dx%d", bounds.Dx(), bounds.Dy())
 	}
-	
+
 	// Check pixel values
 	testCases := []struct {
 		x, y     int
@@ -107,7 +107,7 @@ func TestAgentImage_TensorToImage_PixelValues(t *testing.T) {
 		{0, 1, 127}, // 0.5 -> 127 (approximately)
 		{1, 1, 191}, // 0.25 -> 191 (approximately)
 	}
-	
+
 	for _, tc := range testCases {
 		actual := img.GrayAt(tc.x, tc.y).Y
 		// Allow small rounding differences
@@ -122,12 +122,12 @@ func TestAgentImage_ToString(t *testing.T) {
 	// Test tensor to string conversion
 	tensor := [][]float32{{0.5}}
 	ai := &AgentImage{tensor: tensor}
-	
+
 	path := ai.ToString()
 	if path == "" {
 		t.Error("Expected non-empty path")
 	}
-	
+
 	// Should have converted tensor to image and saved it
 	if ai.rawImg == nil {
 		t.Error("Expected rawImg to be set after ToString()")
@@ -157,7 +157,7 @@ func TestAgentAudio_Creation(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			aa, err := NewAgentAudio(tt.value)

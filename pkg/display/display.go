@@ -25,15 +25,15 @@ import (
 
 // Colors for consistent theming
 var (
-	yellowColor   = color.New(color.FgYellow, color.Bold)
-	blueColor     = color.New(color.FgBlue)
-	greenColor    = color.New(color.FgGreen)
-	redColor      = color.New(color.FgRed, color.Bold)
-	cyanColor     = color.New(color.FgCyan)
-	magentaColor  = color.New(color.FgMagenta)
-	whiteColor    = color.New(color.FgWhite)
-	dimColor      = color.New(color.Faint)
-	boldColor     = color.New(color.Bold)
+	yellowColor  = color.New(color.FgYellow, color.Bold)
+	blueColor    = color.New(color.FgBlue)
+	greenColor   = color.New(color.FgGreen)
+	redColor     = color.New(color.FgRed, color.Bold)
+	cyanColor    = color.New(color.FgCyan)
+	magentaColor = color.New(color.FgMagenta)
+	whiteColor   = color.New(color.FgWhite)
+	dimColor     = color.New(color.Faint)
+	boldColor    = color.New(color.Bold)
 )
 
 // Display handles all CLI output formatting
@@ -113,7 +113,7 @@ func (d *Display) Code(title, code string) {
 	if title != "" {
 		fmt.Println(cyanColor.Sprint("📝 " + title))
 	}
-	
+
 	// Create a box around the code
 	fmt.Println(d.codeBox(code))
 }
@@ -135,7 +135,7 @@ func (d *Display) Error(err error) {
 	}
 	fmt.Println()
 	fmt.Println(redColor.Sprint("❌ Error:"))
-	
+
 	// In verbose mode, try to extract and format detailed error info
 	if d.verbose {
 		errStr := err.Error()
@@ -143,7 +143,7 @@ func (d *Display) Error(err error) {
 		if strings.Contains(errStr, "[Model:") && strings.Contains(errStr, "]") {
 			// Extract and format model info
 			fmt.Println(d.indent(errStr, 3))
-			
+
 			// Add debugging suggestions
 			fmt.Println()
 			fmt.Println(dimColor.Sprint("   💡 Debug tips:"))
@@ -252,10 +252,10 @@ func (d *Display) codeBox(code string) string {
 	}
 
 	var result strings.Builder
-	
+
 	// Top border
 	result.WriteString(dimColor.Sprint("┌" + strings.Repeat("─", maxLen+2) + "┐\n"))
-	
+
 	// Code lines
 	for _, line := range lines {
 		padding := maxLen - len(line)
@@ -264,10 +264,10 @@ func (d *Display) codeBox(code string) string {
 		result.WriteString(strings.Repeat(" ", padding))
 		result.WriteString(dimColor.Sprint(" │\n"))
 	}
-	
+
 	// Bottom border
 	result.WriteString(dimColor.Sprint("└" + strings.Repeat("─", maxLen+2) + "┘"))
-	
+
 	return result.String()
 }
 
@@ -288,7 +288,7 @@ func (d *Display) StartSpinner(message string) *Spinner {
 		message: message,
 		stopped: false,
 	}
-	
+
 	go func() {
 		frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 		i := 0
@@ -299,7 +299,7 @@ func (d *Display) StartSpinner(message string) *Spinner {
 		}
 		fmt.Print("\r" + strings.Repeat(" ", len(message)+3) + "\r")
 	}()
-	
+
 	return spinner
 }
 

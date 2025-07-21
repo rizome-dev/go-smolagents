@@ -165,7 +165,7 @@ final_answer(result)
 			AuthorizedPackages: []string{"fmt", "math", "strings"},
 			MaxCodeLength:      100000, // Support large code blocks
 			MaxSteps:           10,
-			Verbose:            false, // Turn off verbose to avoid display issues
+			Verbose:            false,                          // Turn off verbose to avoid display issues
 			CodeBlockTags:      [2]string{"<code>", "</code>"}, // Must set code block tags!
 		}
 

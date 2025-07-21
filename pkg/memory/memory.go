@@ -188,17 +188,17 @@ func NewActionStepWithImages(stepNumber int, startTime time.Time, images []*mode
 }
 
 // Getter and setter methods for ActionStep
-func (as *ActionStep) GetStepNumber() int                         { return as.StepNumber }
-func (as *ActionStep) GetTiming() monitoring.Timing               { return as.Timing }
-func (as *ActionStep) GetModelInputMessages() []Message           { return as.ModelInputMessages }
-func (as *ActionStep) GetToolCalls() []ToolCall                   { return as.ToolCalls }
-func (as *ActionStep) GetError() error                            { return as.Error }
-func (as *ActionStep) GetModelOutputMessage() *models.ChatMessage { return as.ModelOutputMessage }
-func (as *ActionStep) GetModelOutput() string                     { return as.ModelOutput }
-func (as *ActionStep) GetObservations() string                    { return as.Observations }
+func (as *ActionStep) GetStepNumber() int                           { return as.StepNumber }
+func (as *ActionStep) GetTiming() monitoring.Timing                 { return as.Timing }
+func (as *ActionStep) GetModelInputMessages() []Message             { return as.ModelInputMessages }
+func (as *ActionStep) GetToolCalls() []ToolCall                     { return as.ToolCalls }
+func (as *ActionStep) GetError() error                              { return as.Error }
+func (as *ActionStep) GetModelOutputMessage() *models.ChatMessage   { return as.ModelOutputMessage }
+func (as *ActionStep) GetModelOutput() string                       { return as.ModelOutput }
+func (as *ActionStep) GetObservations() string                      { return as.Observations }
 func (as *ActionStep) GetObservationImages() []*models.MediaContent { return as.ObservationImages }
-func (as *ActionStep) GetActionOutput() interface{}               { return as.ActionOutput }
-func (as *ActionStep) GetTokenUsage() *monitoring.TokenUsage      { return as.TokenUsage }
+func (as *ActionStep) GetActionOutput() interface{}                 { return as.ActionOutput }
+func (as *ActionStep) GetTokenUsage() *monitoring.TokenUsage        { return as.TokenUsage }
 
 func (as *ActionStep) SetStepNumber(n int)                           { as.StepNumber = n }
 func (as *ActionStep) SetTiming(t monitoring.Timing)                 { as.Timing = t }
@@ -208,9 +208,11 @@ func (as *ActionStep) SetError(err error)                            { as.Error 
 func (as *ActionStep) SetModelOutputMessage(msg *models.ChatMessage) { as.ModelOutputMessage = msg }
 func (as *ActionStep) SetModelOutput(output string)                  { as.ModelOutput = output }
 func (as *ActionStep) SetObservations(obs string)                    { as.Observations = obs }
-func (as *ActionStep) SetObservationImages(images []*models.MediaContent) { as.ObservationImages = images }
-func (as *ActionStep) SetActionOutput(output interface{})            { as.ActionOutput = output }
-func (as *ActionStep) SetTokenUsage(usage *monitoring.TokenUsage)    { as.TokenUsage = usage }
+func (as *ActionStep) SetObservationImages(images []*models.MediaContent) {
+	as.ObservationImages = images
+}
+func (as *ActionStep) SetActionOutput(output interface{})         { as.ActionOutput = output }
+func (as *ActionStep) SetTokenUsage(usage *monitoring.TokenUsage) { as.TokenUsage = usage }
 
 // GetType implements MemoryStep
 func (as *ActionStep) GetType() string {
@@ -248,7 +250,7 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 				"text": "Observation images:",
 			},
 		}
-		
+
 		// Add each image to content
 		for _, img := range as.ObservationImages {
 			if img.Type == models.MediaTypeImage && img.ImageURL != nil {
@@ -261,7 +263,7 @@ func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 				})
 			}
 		}
-		
+
 		imageMessage := &Message{
 			Role:    models.RoleUser,
 			Content: content,
@@ -439,7 +441,7 @@ func (ps *PlanningStep) ToDict() (map[string]interface{}, error) {
 
 // TaskStep represents the initial task given to the agent
 type TaskStep struct {
-	Task       string        `json:"task"`
+	Task       string                 `json:"task"`
 	TaskImages []*models.MediaContent `json:"task_images,omitempty"`
 }
 
@@ -472,7 +474,7 @@ func (ts *TaskStep) ToMessages(summaryMode bool) ([]Message, error) {
 				"text": fmt.Sprintf("New task:\n%s", ts.Task),
 			},
 		}
-		
+
 		// Add each image to content
 		for _, img := range ts.TaskImages {
 			if img.Type == models.MediaTypeImage && img.ImageURL != nil {
@@ -485,14 +487,14 @@ func (ts *TaskStep) ToMessages(summaryMode bool) ([]Message, error) {
 				})
 			}
 		}
-		
+
 		return []Message{{
 			Role:    models.RoleUser,
 			Content: content,
 		}}, nil
 	}
 
-	// Simple text-only message  
+	// Simple text-only message
 	message := NewMessage(models.RoleUser, fmt.Sprintf("New task:\n%s", ts.Task))
 
 	return []Message{*message}, nil

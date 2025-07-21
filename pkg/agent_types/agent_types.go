@@ -244,13 +244,13 @@ func (ai *AgentImage) tensorToImage(tensor [][]float32) image.Image {
 	if len(tensor) == 0 || len(tensor[0]) == 0 {
 		return nil
 	}
-	
+
 	height := len(tensor)
 	width := len(tensor[0])
-	
+
 	// Create a new grayscale image
 	img := image.NewGray(image.Rect(0, 0, width, height))
-	
+
 	// Convert tensor values to pixel values
 	// Following Python implementation: (255 - array * 255)
 	for y := 0; y < height; y++ {
@@ -262,13 +262,13 @@ func (ai *AgentImage) tensorToImage(tensor [][]float32) image.Image {
 			} else if val > 1 {
 				val = 1
 			}
-			
+
 			// Convert to uint8 (0-255)
 			pixelValue := uint8((1 - val) * 255)
 			img.SetGray(x, y, color.Gray{pixelValue})
 		}
 	}
-	
+
 	return img
 }
 

@@ -85,7 +85,7 @@ func main() {
     result := 2 + 2
     fmt.Println(result)
 }`,
-			hasCode:  true,
+			hasCode: true,
 		},
 		{
 			name: "multiple incomplete code blocks",
@@ -157,7 +157,7 @@ sum = 0
 result = 2 + 2
 print(result)
 </code>`,
-			expected: "",  // ExtractThought only gets explicit "Thought:" patterns
+			expected: "", // ExtractThought only gets explicit "Thought:" patterns
 		},
 		{
 			name: "implicit thought in Parse result",
@@ -172,7 +172,7 @@ func main() {
     fmt.Println(result)
 }
 </code>`,
-			expected: "",  // ExtractThought only gets explicit "Thought:" patterns
+			expected: "", // ExtractThought only gets explicit "Thought:" patterns
 		},
 	}
 
@@ -370,8 +370,8 @@ print("Hello")
 			},
 		},
 		{
-			name: "raw response with no code returns full text as thought",
-			input: `I understand you want to calculate 2 + 2. Let me think about this.`,
+			name:         "raw response with no code returns full text as thought",
+			input:        `I understand you want to calculate 2 + 2. Let me think about this.`,
 			expectedType: "raw",
 			checkResult: func(result *ParseResult) bool {
 				return result.Thought == "I understand you want to calculate 2 + 2. Let me think about this." &&
@@ -379,8 +379,8 @@ print("Hello")
 			},
 		},
 		{
-			name: "response with 'the answer is' detected as final answer",
-			input: `I understand you want to calculate 2 + 2. The answer is 4.`,
+			name:         "response with 'the answer is' detected as final answer",
+			input:        `I understand you want to calculate 2 + 2. The answer is 4.`,
 			expectedType: "final_answer",
 			checkResult: func(result *ParseResult) bool {
 				return result.Content == "4."

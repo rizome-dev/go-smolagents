@@ -296,18 +296,18 @@ func (ge *GoExecutor) extractNewVariables(code string) ([]string, error) {
 func _() {
 %s
 }`, code)
-	
+
 	node, err := parser.ParseFile(fset, "", wrappedCode, parser.ParseComments)
 	if err != nil {
 		return nil, nil // Return empty on parse error
 	}
-	
+
 	var newVars []string
 	existingVars := make(map[string]bool)
 	for name := range ge.variables {
 		existingVars[name] = true
 	}
-	
+
 	// Find the function body
 	var funcBody *ast.BlockStmt
 	for _, decl := range node.Decls {
@@ -316,14 +316,14 @@ func _() {
 			break
 		}
 	}
-	
+
 	if funcBody == nil {
 		return nil, nil
 	}
-	
+
 	// Track variables found in code
 	foundVars := make(map[string]bool)
-	
+
 	// Visit all nodes to find variable declarations
 	ast.Inspect(funcBody, func(n ast.Node) bool {
 		switch x := n.(type) {
@@ -358,7 +358,7 @@ func _() {
 		}
 		return true
 	})
-	
+
 	return newVars, nil
 }
 
@@ -368,35 +368,35 @@ func (ge *GoExecutor) transformFunctionVariables(code string) string {
 	// More flexible pattern to match function declarations with multiline support
 	// This will match: funcName := func(params) returnType {
 	funcPattern := regexp.MustCompile(`(?ms)^(\s*)(\w+)\s*:=\s*func\s*\((.*?)\)\s*(.*?)\s*\{`)
-	
+
 	// Find all matches with their positions
 	allMatches := funcPattern.FindAllStringSubmatchIndex(code, -1)
-	
+
 	// Process in reverse order to avoid position shifts
 	for i := len(allMatches) - 1; i >= 0; i-- {
 		match := funcPattern.FindStringSubmatch(code[allMatches[i][0]:])
 		if len(match) < 5 {
 			continue
 		}
-		
+
 		indent := match[1]
 		funcName := match[2]
 		params := match[3]
 		returnType := strings.TrimSpace(match[4])
-		
+
 		// Find the matching closing brace for this function
 		startPos := allMatches[i][0]
 		braceCount := 0
 		inString := false
 		escapeNext := false
 		funcEnd := startPos
-		
+
 		for j := startPos; j < len(code); j++ {
 			if escapeNext {
 				escapeNext = false
 				continue
 			}
-			
+
 			switch code[j] {
 			case '\\':
 				if inString {
@@ -421,25 +421,25 @@ func (ge *GoExecutor) transformFunctionVariables(code string) string {
 					}
 				}
 			}
-			
+
 			if funcEnd != startPos {
 				break
 			}
 		}
-		
+
 		// Transform ALL function declarations to var declaration format
 		// This ensures proper typing and allows recursive calls
 		oldDecl := fmt.Sprintf(`%s%s := func(%s) %s {`, indent, funcName, params, returnType)
 		// Use backticks to preserve actual newline
 		newDecl := fmt.Sprintf(`%svar %s func(%s) %s
-%s%s = func(%s) %s {`, 
+%s%s = func(%s) %s {`,
 			indent, funcName, params, returnType,
 			indent, funcName, params, returnType)
-		
+
 		// Replace in the code
 		code = code[:startPos] + strings.Replace(code[startPos:], oldDecl, newDecl, 1)
 	}
-	
+
 	return code
 }
 
@@ -513,7 +513,8 @@ func toBool(v interface{}) bool {
 	default:
 		return false
 	}
-}`}
+}`
+}
 
 // wrapArithmeticOperations wraps variables in type conversion functions for arithmetic
 func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[string]interface{}) string {
@@ -522,7 +523,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 		if value == nil {
 			continue
 		}
-		
+
 		// Check if the variable is a function in the code
 		funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, varName))
 		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, varName))
@@ -530,7 +531,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 			// Skip function variables
 			continue
 		}
-		
+
 		// Determine the appropriate conversion function
 		var convFunc string
 		switch v := value.(type) {
@@ -553,7 +554,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 		default:
 			continue
 		}
-		
+
 		// Replace patterns like "x + 10" with "toInt(x) + 10"
 		// Handle different types of assignments
 		lines := strings.Split(code, "\n")
@@ -561,7 +562,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 			// Special handling for for loops
 			if strings.Contains(line, "for") && strings.Contains(line, ":=") {
 				// Handle for loop conditions that use existing variables
-				// Pattern: for i := start; i <= existingVar; i++ 
+				// Pattern: for i := start; i <= existingVar; i++
 				forLoopRegex := regexp.MustCompile(`^(\s*for\s+\w+\s*:=\s*[^;]+;\s*)([^;]+)(\s*;\s*[^{]+)(.*)$`)
 				if matches := forLoopRegex.FindStringSubmatch(line); len(matches) >= 4 {
 					condition := matches[2]
@@ -573,7 +574,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 				}
 				continue
 			}
-			
+
 			// Check for compound assignment operators (+=, -=, etc.)
 			compoundRegex := regexp.MustCompile(fmt.Sprintf(`^(\s*%s\s*)([+\-*/%%]=)\s*(.+)$`, varName))
 			if matches := compoundRegex.FindStringSubmatch(line); len(matches) == 4 {
@@ -591,7 +592,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 					wrappedRhs := regexp.MustCompile(fmt.Sprintf(`\b%s\b`, varName)).ReplaceAllString(rhs, convFunc+"("+varName+")")
 					lines[i] = matches[1] + wrappedRhs
 				} else if regexp.MustCompile(fmt.Sprintf(`\b%s\s*[+\-*/%%<>=]`, varName)).MatchString(line) ||
-				           regexp.MustCompile(fmt.Sprintf(`[+\-*/%%<>=]\s*%s\b`, varName)).MatchString(line) {
+					regexp.MustCompile(fmt.Sprintf(`[+\-*/%%<>=]\s*%s\b`, varName)).MatchString(line) {
 					// Not an assignment, wrap all occurrences EXCEPT in Printf/Sprintf calls and function calls
 					// Skip if this line contains Printf, Sprintf, Fprintf, etc.
 					if !strings.Contains(line, "Printf") && !strings.Contains(line, "Sprintf") && !strings.Contains(line, "Fprintf") {
@@ -616,7 +617,7 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 		}
 		code = strings.Join(lines, "\n")
 	}
-	
+
 	return code
 }
 
@@ -624,49 +625,49 @@ func (ge *GoExecutor) wrapArithmeticOperations(code string, existingVars map[str
 func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) []string {
 	// Map of package names to their import paths
 	packageMap := map[string]string{
-		"json":      "encoding/json",
-		"base64":    "encoding/base64",
-		"csv":       "encoding/csv",
-		"md5":       "crypto/md5",
-		"sha1":      "crypto/sha1",
-		"sha256":    "crypto/sha256",
-		"gzip":      "compress/gzip",
-		"zip":       "archive/zip",
-		"url":       "net/url",
-		"filepath":  "path/filepath",
-		"path":      "path",
-		"rand":      "math/rand",
-		"math":      "math",
-		"strings":   "strings",
-		"strconv":   "strconv",
-		"time":      "time",
-		"regexp":    "regexp",
-		"sort":      "sort",
-		"unicode":   "unicode",
-		"utf8":      "unicode/utf8",
-		"bytes":     "bytes",
-		"bufio":     "bufio",
-		"io":        "io",
-		"list":      "container/list",
-		"heap":      "container/heap",
-		"reflect":   "reflect",
-		"os":        "os",
+		"json":     "encoding/json",
+		"base64":   "encoding/base64",
+		"csv":      "encoding/csv",
+		"md5":      "crypto/md5",
+		"sha1":     "crypto/sha1",
+		"sha256":   "crypto/sha256",
+		"gzip":     "compress/gzip",
+		"zip":      "archive/zip",
+		"url":      "net/url",
+		"filepath": "path/filepath",
+		"path":     "path",
+		"rand":     "math/rand",
+		"math":     "math",
+		"strings":  "strings",
+		"strconv":  "strconv",
+		"time":     "time",
+		"regexp":   "regexp",
+		"sort":     "sort",
+		"unicode":  "unicode",
+		"utf8":     "unicode/utf8",
+		"bytes":    "bytes",
+		"bufio":    "bufio",
+		"io":       "io",
+		"list":     "container/list",
+		"heap":     "container/heap",
+		"reflect":  "reflect",
+		"os":       "os",
 	}
-	
+
 	// Always include these core imports
 	alwaysInclude := map[string]bool{
 		"encoding/json": true, // For result marshaling
 		"os":            true, // For os.Exit and error output
 		"bytes":         true, // For printBuffer
 	}
-	
+
 	usedImports := make(map[string]bool)
-	
+
 	// Add always-included imports
 	for imp := range alwaysInclude {
 		usedImports[imp] = true
 	}
-	
+
 	// Check which packages are used in the code
 	for pkg, importPath := range packageMap {
 		// Skip if not in available imports
@@ -680,20 +681,20 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 		if !found && !alwaysInclude[importPath] {
 			continue
 		}
-		
+
 		// Check if package is used
 		pattern := fmt.Sprintf(`\b%s\.`, regexp.QuoteMeta(pkg))
 		if matched, _ := regexp.MatchString(pattern, code); matched {
 			usedImports[importPath] = true
 		}
 	}
-	
+
 	// Convert map to slice
 	var result []string
 	for imp := range usedImports {
 		result = append(result, imp)
 	}
-	
+
 	// Sort for consistent output
 	sort.Strings(result)
 	return result
@@ -703,10 +704,10 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (string, error) {
 	// Extract new variables from the code
 	newVars, _ := ge.extractNewVariables(code)
-	
+
 	// Transform function variables first
 	code = ge.transformFunctionVariables(code)
-	
+
 	// Transform code to fix variable declarations
 	declaredVars := make(map[string]bool)
 	for name := range ge.variables {
@@ -716,7 +717,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		declaredVars[name] = true
 	}
 	transformedCode := ge.transformVariableDeclarations(code, declaredVars)
-	
+
 	// Wrap arithmetic operations with all variables in type conversions
 	// Include both existing variables and new variables
 	allVarsForWrapping := make(map[string]interface{})
@@ -732,7 +733,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 			// It's a function, skip it - don't add to wrapping
 			continue
 		}
-		
+
 		// Check if the variable is initialized with an integer literal
 		intInitPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*(\d+)\b`, varName))
 		if matches := intInitPattern.FindStringSubmatch(code); len(matches) > 1 {
@@ -744,13 +745,13 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		}
 	}
 	transformedCode = ge.wrapArithmeticOperations(transformedCode, allVarsForWrapping)
-	
+
 	// Combine default and authorized packages
 	allAvailablePackages := append(ge.authorizedPackages, authorizedPackages...)
-	
+
 	// Detect which imports are actually used
 	usedImports := ge.detectUsedImports(transformedCode, allAvailablePackages)
-	
+
 	// Build import list
 	var imports []string
 	for _, pkg := range usedImports {
@@ -774,7 +775,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 				fmt.Sprintf("var %s interface{} = %s", name, varValue))
 		}
 	}
-	
+
 	// Declare new variables with appropriate types
 	funcVarTypes := make(map[string]string)
 	for _, varName := range newVars {
@@ -783,7 +784,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		// Use (?s) flag to make . match newlines as well
 		funcPattern := regexp.MustCompile(fmt.Sprintf(`(?s)\b%s\s*:=\s*func\s*\((.*?)\)\s*(.*?)\s*\{`, regexp.QuoteMeta(varName)))
 		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`(?m)\bvar\s+%s\s+func\s*\((.*?)\)\s*(.*?)$`, regexp.QuoteMeta(varName)))
-		
+
 		isFuncVar := false
 		// Check both original code and transformed code
 		if funcPattern.MatchString(code) || funcPattern.MatchString(transformedCode) {
@@ -807,7 +808,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 				funcVarTypes[varName] = fmt.Sprintf("func(%s) %s", params, returns)
 			}
 		}
-		
+
 		if !isFuncVar {
 			// Non-function variables as interface{}
 			variableDeclarations = append(variableDeclarations,
@@ -822,7 +823,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 		allVars = append(allVars, name)
 	}
 	allVars = append(allVars, newVars...)
-	
+
 	// Use funcVarTypes to identify function variables to exclude from capture
 	funcVars := make(map[string]bool)
 	for _, varName := range allVars {
@@ -838,7 +839,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 			}
 		}
 	}
-	
+
 	var variableCaptures []string
 	for _, name := range allVars {
 		// Skip function variables as they can't be serialized
@@ -847,8 +848,8 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 				fmt.Sprintf(`"%s": %s`, name, name))
 		}
 	}
-	
-	// Handle empty variable captures to avoid syntax errors  
+
+	// Handle empty variable captures to avoid syntax errors
 	variableCapturesStr := ""
 	if len(variableCaptures) > 0 {
 		// For single item, keep it on same line; for multiple, use newlines
@@ -1067,7 +1068,7 @@ func (ge *GoExecutor) executeProgram(program string) (*ExecutionResult, error) {
 			if vars, ok := output["variables"].(map[string]interface{}); ok {
 				result.Variables = vars
 			}
-			
+
 			// Extract print logs if present
 			if logs, ok := output["logs"].(string); ok {
 				result.Logs = logs

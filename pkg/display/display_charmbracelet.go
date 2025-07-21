@@ -29,11 +29,11 @@ import (
 
 // CharmDisplay handles all CLI output formatting with Charmbracelet libraries
 type CharmDisplay struct {
-	verbose      bool
-	width        int
-	styles       *DisplayStyles
-	renderer     *glamour.TermRenderer
-	termProfile  termenv.Profile
+	verbose     bool
+	width       int
+	styles      *DisplayStyles
+	renderer    *glamour.TermRenderer
+	termProfile termenv.Profile
 }
 
 // DisplayStyles holds all the lipgloss styles
@@ -59,7 +59,7 @@ type DisplayStyles struct {
 // NewCharmDisplay creates a new display instance with Charmbracelet styling
 func NewCharmDisplay(verbose bool) *CharmDisplay {
 	width := getTerminalWidth()
-	
+
 	// Create glamour renderer for markdown
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -68,10 +68,10 @@ func NewCharmDisplay(verbose bool) *CharmDisplay {
 
 	// Detect color profile
 	profile := termenv.ColorProfile()
-	
+
 	// Create styles
 	styles := createStyles(profile)
-	
+
 	return &CharmDisplay{
 		verbose:     verbose,
 		width:       width,
@@ -177,10 +177,10 @@ func (d *CharmDisplay) UpdateWidth() {
 // Rule prints a horizontal rule with optional title
 func (d *CharmDisplay) Rule(title string) {
 	d.UpdateWidth() // Check for terminal resize
-	
+
 	ruleChar := "━"
 	ruleWidth := d.width
-	
+
 	if title == "" {
 		rule := strings.Repeat(ruleChar, ruleWidth)
 		fmt.Println(d.styles.Rule.Render(rule))
@@ -204,7 +204,7 @@ func (d *CharmDisplay) Rule(title string) {
 	rule := strings.Repeat(ruleChar, leftPadding) +
 		d.styles.Step.Render(titleWithSpaces) +
 		strings.Repeat(ruleChar, rightPadding)
-		
+
 	fmt.Println(d.styles.Rule.Render(rule))
 }
 
@@ -249,7 +249,7 @@ func (d *CharmDisplay) Code(title, code string) {
 			fmt.Println(d.styles.Code.Render(title))
 		}
 	}
-	
+
 	// Render code in a box
 	codeBox := d.styles.CodeBox.Render(code)
 	fmt.Println(codeBox)
@@ -274,7 +274,7 @@ func (d *CharmDisplay) Error(err error) {
 	fmt.Println(d.styles.Error.Render("❌ Error:"))
 	errStr := err.Error()
 	fmt.Println(d.styles.Error.Copy().Bold(false).PaddingLeft(3).Render(errStr))
-	
+
 	// In verbose mode, add debugging tips
 	if d.verbose {
 		d.addErrorTips(errStr)
@@ -285,7 +285,7 @@ func (d *CharmDisplay) Error(err error) {
 func (d *CharmDisplay) addErrorTips(errStr string) {
 	fmt.Println()
 	fmt.Println(d.styles.ErrorTip.Copy().PaddingLeft(3).Render("💡 Debug tips:"))
-	
+
 	if strings.Contains(errStr, "status 401") {
 		fmt.Println(d.styles.ErrorTip.Render("- Check your API token (HF_TOKEN environment variable)"))
 	} else if strings.Contains(errStr, "status 404") {
@@ -346,7 +346,7 @@ func (d *CharmDisplay) ModelOutput(content string) {
 	}
 	fmt.Println()
 	fmt.Println(d.styles.Info.Render("🤖 Model Output:"))
-	
+
 	// Try to render as markdown
 	if rendered, err := d.renderer.Render(content); err == nil {
 		fmt.Print(rendered)
