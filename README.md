@@ -66,7 +66,7 @@ func main() {
             fmt.Printf("Steps taken: %d\n", result.StepCount)
         }
     }
-    }
+}
 ```
 
 ### ReactCodeAgent with Custom Options
