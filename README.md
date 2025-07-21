@@ -30,26 +30,26 @@ import (
 )
 
 func main() {
-	// Get HuggingFace API token from environment
-	token := os.Getenv("HF_TOKEN")
-	if token == "" {
-		log.Fatal("Please set HF_TOKEN environment variable")
-	}
+    // Get HuggingFace API token from environment
+    token := os.Getenv("HF_TOKEN")
+    if token == "" {
+        log.Fatal("Please set HF_TOKEN environment variable")
+    }
 
-	// Create model with explicit provider
-	model := models.NewInferenceClientModel(
-		"moonshotai/Kimi-K2-Instruct",
-		token,
-		map[string]interface{}{
-		},
-	)
+    // Create model with explicit provider
+    model := models.NewInferenceClientModel(
+        "moonshotai/Kimi-K2-Instruct",
+        token,
+        map[string]interface{}{
+        },
+    )
 
-	// Create ReactCodeAgent with default options
-	agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
-	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
-	}
-	defer agent.Close()
+    // Create ReactCodeAgent with default options
+    agent, err := agents.NewReactCodeAgent(model, nil, "", nil)
+    if err != nil {
+        log.Fatalf("Failed to create agent: %v", err)
+    }
+    defer agent.Close()
 
     // Run the agent with a longer timeout
     ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -66,7 +66,7 @@ func main() {
             fmt.Printf("Steps taken: %d\n", result.StepCount)
         }
     }
-}
+    }
 ```
 
 ### ReactCodeAgent with Custom Options
