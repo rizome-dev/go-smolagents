@@ -186,14 +186,30 @@ func (ge *GoExecutor) ExecuteRaw(code string, authorizedImports []string) (*Exec
 func (ge *GoExecutor) validateCode(code string, authorizedImports []string) error {
 	// Parse the code to check syntax by wrapping it in a function
 	fset := token.NewFileSet()
-	wrappedCode := fmt.Sprintf(`package main
-func main() {
-	var result interface{}
+	
+	// First, try to parse as-is to check if it contains function definitions
+	// If it does, we need to handle it differently
+	testWrapped := fmt.Sprintf(`package main
+func _() {
 	%s
 }`, code)
-	_, err := parser.ParseFile(fset, "", wrappedCode, parser.ParseComments)
+	
+	_, err := parser.ParseFile(fset, "", testWrapped, parser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("syntax error: %w", err)
+		// If parsing in a function context fails, it might contain function definitions
+		// Try parsing at package level
+		packageLevel := fmt.Sprintf(`package main
+%s
+func main() {
+	// Placeholder
+}`, code)
+		_, err2 := parser.ParseFile(fset, "", packageLevel, parser.ParseComments)
+		if err2 != nil {
+			// Neither worked, return the original error
+			return fmt.Errorf("syntax error: %w", err)
+		}
+		// Package-level parsing worked, but we don't support function definitions
+		return fmt.Errorf("function definitions are not supported in code snippets")
 	}
 
 	// Check for unauthorized imports
@@ -340,15 +356,21 @@ func processVarDeclaration(x *ast.DeclStmt, existingVars, foundVars map[string]b
 	}
 }
 
-func (ge *GoExecutor) extractNewVariables(code string) ([]string, error) {
+// VariableInfo contains information about a variable
+type VariableInfo struct {
+	Name       string
+	IsVarDecl  bool // true for var declarations, false for := assignments
+}
+
+func (ge *GoExecutor) extractNewVariables(code string) ([]string, map[string]bool, error) {
 	node, err := parseCodeToAST(code)
 	if err != nil {
-		return nil, nil // Return empty on parse error
+		return nil, nil, nil // Return empty on parse error
 	}
 
 	funcBody := findFunctionBody(node)
 	if funcBody == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Initialize tracking maps
@@ -357,20 +379,41 @@ func (ge *GoExecutor) extractNewVariables(code string) ([]string, error) {
 		existingVars[name] = true
 	}
 	foundVars := make(map[string]bool)
+	varDeclVars := make(map[string]bool) // Track which vars come from var declarations
 	var newVars []string
 
 	// Visit all nodes to find variable declarations
 	ast.Inspect(funcBody, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.AssignStmt:
-			processAssignment(x, existingVars, foundVars, &newVars)
+			if x.Tok == token.DEFINE {
+				// Process := assignments
+				processAssignment(x, existingVars, foundVars, &newVars)
+			} else if x.Tok == token.ASSIGN {
+				// Also process = assignments to undefined variables
+				processAssignment(x, existingVars, foundVars, &newVars)
+			}
 		case *ast.DeclStmt:
-			processVarDeclaration(x, existingVars, foundVars, &newVars)
+			// Process var declarations but mark them differently
+			genDecl, ok := x.Decl.(*ast.GenDecl)
+			if ok && genDecl.Tok == token.VAR {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valueSpec.Names {
+							if name.Name != "_" && !existingVars[name.Name] && !foundVars[name.Name] {
+								foundVars[name.Name] = true
+								newVars = append(newVars, name.Name)
+								varDeclVars[name.Name] = true // Mark as var declaration
+							}
+						}
+					}
+				}
+			}
 		}
 		return true
 	})
 
-	return newVars, nil
+	return newVars, varDeclVars, nil
 }
 
 // transformFunctionVariables handles all function variable declarations,
@@ -455,12 +498,19 @@ func (ge *GoExecutor) transformFunctionVariables(code string) string {
 }
 
 // transformVariableDeclarations transforms := to = for already declared variables
+// and var declarations to simple assignments
 func (ge *GoExecutor) transformVariableDeclarations(code string, declaredVars map[string]bool) string {
 	// For now, use a simple regex-based approach
 	lines := strings.Split(code, "\n")
 	for i, line := range lines {
-		// Match variable := value pattern
-		if matches := regexp.MustCompile(`^\s*(\w+)\s*:=\s*(.+)$`).FindStringSubmatch(line); len(matches) == 3 {
+		// Match var name = value pattern
+		if matches := regexp.MustCompile(`^\s*var\s+(\w+)\s*=\s*(.+)$`).FindStringSubmatch(line); len(matches) == 3 {
+			varName := matches[1]
+			value := matches[2]
+			// Transform to simple assignment
+			lines[i] = fmt.Sprintf("%s = %s", varName, value)
+		} else if matches := regexp.MustCompile(`^\s*(\w+)\s*:=\s*(.+)$`).FindStringSubmatch(line); len(matches) == 3 {
+			// Match variable := value pattern
 			varName := matches[1]
 			if declaredVars[varName] {
 				// Replace := with =
@@ -580,6 +630,11 @@ func wrapVariableInForLoop(line, varName, convFunc string) (string, bool) {
 
 // wrapVariableInLine handles variable wrapping in a single line
 func wrapVariableInLine(line, varName, convFunc string) string {
+	// Skip var declarations - don't wrap them
+	if strings.HasPrefix(strings.TrimSpace(line), "var ") {
+		return line
+	}
+	
 	// Check for compound assignment operators (+=, -=, etc.)
 	compoundRegex := regexp.MustCompile(fmt.Sprintf(`^(\s*%s\s*)([+\-*/%%]=)\s*(.+)$`, varName))
 	if matches := compoundRegex.FindStringSubmatch(line); len(matches) == 4 {
@@ -736,8 +791,8 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 
 // buildProgram creates a complete Go program from the code snippet
 // prepareVariablesAndCode extracts variables and transforms code
-func (ge *GoExecutor) prepareVariablesAndCode(code string) ([]string, string, map[string]bool) {
-	newVars, _ := ge.extractNewVariables(code)
+func (ge *GoExecutor) prepareVariablesAndCode(code string) ([]string, map[string]bool, string, map[string]bool) {
+	newVars, varDeclVars, _ := ge.extractNewVariables(code)
 	code = ge.transformFunctionVariables(code)
 	
 	declaredVars := make(map[string]bool)
@@ -749,7 +804,7 @@ func (ge *GoExecutor) prepareVariablesAndCode(code string) ([]string, string, ma
 	}
 	transformedCode := ge.transformVariableDeclarations(code, declaredVars)
 	
-	return newVars, transformedCode, declaredVars
+	return newVars, varDeclVars, transformedCode, declaredVars
 }
 
 // prepareWrappingVariables builds the variable map for arithmetic wrapping
@@ -810,11 +865,13 @@ func (ge *GoExecutor) buildExistingVariableDeclarations() []string {
 }
 
 // identifyFunctionVariables detects which variables are functions
-func (ge *GoExecutor) identifyFunctionVariables(code, transformedCode string, newVars []string) (map[string]string, []string) {
+func (ge *GoExecutor) identifyFunctionVariables(code, transformedCode string, newVars []string, varDeclVars map[string]bool) (map[string]string, []string) {
 	funcVarTypes := make(map[string]string)
 	var nonFuncDeclarations []string
 	
 	for _, varName := range newVars {
+		// Don't skip var declarations anymore - we need interface{} declarations for them too
+		
 		funcPattern := regexp.MustCompile(fmt.Sprintf(`(?s)\b%s\s*:=\s*func\s*\((.*?)\)\s*(.*?)\s*\{`, regexp.QuoteMeta(varName)))
 		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`(?m)\bvar\s+%s\s+func\s*\((.*?)\)\s*(.*?)$`, regexp.QuoteMeta(varName)))
 		
@@ -888,7 +945,7 @@ func (ge *GoExecutor) buildVariableCaptures(newVars []string, funcVarTypes map[s
 
 func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (string, error) {
 	// Prepare variables and transform code
-	newVars, transformedCode, _ := ge.prepareVariablesAndCode(code)
+	newVars, varDeclVars, transformedCode, _ := ge.prepareVariablesAndCode(code)
 	
 	// Prepare wrapping variables and wrap arithmetic operations
 	allVarsForWrapping := ge.prepareWrappingVariables(code, newVars)
@@ -901,7 +958,7 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 	variableDeclarations := ge.buildExistingVariableDeclarations()
 	
 	// Identify function variables and build new variable declarations
-	funcVarTypes, nonFuncDeclarations := ge.identifyFunctionVariables(code, transformedCode, newVars)
+	funcVarTypes, nonFuncDeclarations := ge.identifyFunctionVariables(code, transformedCode, newVars, varDeclVars)
 	variableDeclarations = append(variableDeclarations, nonFuncDeclarations...)
 	
 	// Build variable captures
