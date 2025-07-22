@@ -21,14 +21,14 @@ contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"time"
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "time"
 
-	"github.com/rizome-dev/go-smolagents/pkg/agents"
-	"github.com/rizome-dev/go-smolagents/pkg/models"
+    "github.com/rizome-dev/go-smolagents/pkg/agents"
+    "github.com/rizome-dev/go-smolagents/pkg/models"
 )
 
 func main() {
