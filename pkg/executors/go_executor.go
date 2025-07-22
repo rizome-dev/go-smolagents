@@ -124,15 +124,152 @@ func NewGoExecutor(options ...map[string]interface{}) (*GoExecutor, error) {
 }
 
 // DefaultAuthorizedPackages returns the default list of authorized Go packages
+// This includes the entire Go standard library for maximum flexibility
 func DefaultAuthorizedPackages() []string {
+	return GetGoStandardLibraryPackages()
+}
+
+// GetGoStandardLibraryPackages returns a comprehensive list of Go standard library packages
+func GetGoStandardLibraryPackages() []string {
 	return []string{
-		"fmt", "math", "math/rand", "strings", "strconv", "time",
-		"encoding/json", "encoding/csv", "encoding/base64",
-		"regexp", "sort", "unicode", "unicode/utf8",
-		"crypto/md5", "crypto/sha1", "crypto/sha256",
-		"path", "path/filepath", "net/url",
-		"compress/gzip", "archive/zip",
-		"bytes", "bufio", "io", "container/list", "container/heap",
+		// Archive formats
+		"archive/tar", "archive/zip",
+		
+		// Buffers and I/O
+		"bufio", "bytes", "io", "io/fs", "io/ioutil",
+		
+		// Compression
+		"compress/bzip2", "compress/flate", "compress/gzip", "compress/lzw", "compress/zlib",
+		
+		// Containers
+		"container/heap", "container/list", "container/ring",
+		
+		// Context
+		"context",
+		
+		// Cryptography
+		"crypto", "crypto/aes", "crypto/cipher", "crypto/des", "crypto/dsa",
+		"crypto/ecdh", "crypto/ecdsa", "crypto/ed25519", "crypto/elliptic",
+		"crypto/hmac", "crypto/md5", "crypto/rand", "crypto/rc4", "crypto/rsa",
+		"crypto/sha1", "crypto/sha256", "crypto/sha512", "crypto/subtle",
+		"crypto/tls", "crypto/x509", "crypto/x509/pkix",
+		
+		// Database
+		"database/sql", "database/sql/driver",
+		
+		// Debug
+		"debug/buildinfo", "debug/dwarf", "debug/elf", "debug/gosym",
+		"debug/macho", "debug/pe", "debug/plan9obj",
+		
+		// Embed
+		"embed",
+		
+		// Encoding
+		"encoding", "encoding/ascii85", "encoding/asn1", "encoding/base32",
+		"encoding/base64", "encoding/binary", "encoding/csv", "encoding/gob",
+		"encoding/hex", "encoding/json", "encoding/pem", "encoding/xml",
+		
+		// Errors
+		"errors",
+		
+		// Expvar
+		"expvar",
+		
+		// Flag
+		"flag",
+		
+		// Fmt
+		"fmt",
+		
+		// Go language
+		"go/ast", "go/build", "go/build/constraint", "go/constant", "go/doc",
+		"go/doc/comment", "go/format", "go/importer", "go/parser", "go/printer",
+		"go/scanner", "go/token", "go/types",
+		
+		// Hash
+		"hash", "hash/adler32", "hash/crc32", "hash/crc64", "hash/fnv",
+		"hash/maphash",
+		
+		// HTML
+		"html", "html/template",
+		
+		// Image
+		"image", "image/color", "image/color/palette", "image/draw",
+		"image/gif", "image/jpeg", "image/png",
+		
+		// Index
+		"index/suffixarray",
+		
+		// Log
+		"log", "log/slog", "log/syslog",
+		
+		// Maps
+		"maps",
+		
+		// Math
+		"math", "math/big", "math/bits", "math/cmplx", "math/rand", "math/rand/v2",
+		
+		// MIME
+		"mime", "mime/multipart", "mime/quotedprintable",
+		
+		// Net
+		"net", "net/http", "net/http/cgi", "net/http/cookiejar", "net/http/fcgi",
+		"net/http/httptest", "net/http/httptrace", "net/http/httputil",
+		"net/http/internal", "net/http/pprof", "net/mail", "net/netip",
+		"net/rpc", "net/rpc/jsonrpc", "net/smtp", "net/textproto", "net/url",
+		
+		// OS
+		"os", "os/exec", "os/signal", "os/user",
+		
+		// Path
+		"path", "path/filepath",
+		
+		// Plugin
+		"plugin",
+		
+		// Reflect
+		"reflect",
+		
+		// Regexp
+		"regexp", "regexp/syntax",
+		
+		// Runtime
+		"runtime", "runtime/cgo", "runtime/coverage", "runtime/debug",
+		"runtime/metrics", "runtime/pprof", "runtime/race", "runtime/trace",
+		
+		// Slices
+		"slices",
+		
+		// Sort
+		"sort",
+		
+		// Strconv
+		"strconv",
+		
+		// Strings
+		"strings",
+		
+		// Sync
+		"sync", "sync/atomic",
+		
+		// Syscall
+		"syscall",
+		
+		// Testing
+		"testing", "testing/fstest", "testing/iotest", "testing/quick",
+		"testing/slogtest",
+		
+		// Text
+		"text/scanner", "text/tabwriter", "text/template", "text/template/parse",
+		
+		// Time
+		"time", "time/tzdata",
+		
+		// Unicode
+		"unicode", "unicode/utf16", "unicode/utf8",
+		
+		// Unsafe
+		"unsafe",
 	}
 }
 
@@ -152,13 +289,19 @@ func (ge *GoExecutor) ExecuteRaw(code string, authorizedImports []string) (*Exec
 
 	ge.executionCount++
 
-	// Validate the code
-	if err := ge.validateCode(code, authorizedImports); err != nil {
+	// Extract imports from the code and clean it
+	extractedImports, cleanedCode := ge.extractAndRemoveImports(code)
+	
+	// Merge extracted imports with authorized imports
+	allAuthorizedImports := append(authorizedImports, extractedImports...)
+
+	// Validate the cleaned code
+	if err := ge.validateCode(cleanedCode, allAuthorizedImports); err != nil {
 		return nil, fmt.Errorf("code validation failed: %w", err)
 	}
 
-	// Prepare the complete Go program
-	program, err := ge.buildProgram(code, authorizedImports)
+	// Prepare the complete Go program using cleaned code
+	program, err := ge.buildProgram(cleanedCode, allAuthorizedImports)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build program: %w", err)
 	}
@@ -184,35 +327,24 @@ func (ge *GoExecutor) ExecuteRaw(code string, authorizedImports []string) (*Exec
 
 // validateCode validates the Go code before execution
 func (ge *GoExecutor) validateCode(code string, authorizedImports []string) error {
+	// Transform function definitions to variable assignments first
+	transformedCode := ge.transformStandaloneFunctions(code)
+	
 	// Parse the code to check syntax by wrapping it in a function
 	fset := token.NewFileSet()
 	
-	// First, try to parse as-is to check if it contains function definitions
-	// If it does, we need to handle it differently
 	testWrapped := fmt.Sprintf(`package main
 func _() {
 	%s
-}`, code)
+}`, transformedCode)
 	
 	_, err := parser.ParseFile(fset, "", testWrapped, parser.ParseComments)
 	if err != nil {
-		// If parsing in a function context fails, it might contain function definitions
-		// Try parsing at package level
-		packageLevel := fmt.Sprintf(`package main
-%s
-func main() {
-	// Placeholder
-}`, code)
-		_, err2 := parser.ParseFile(fset, "", packageLevel, parser.ParseComments)
-		if err2 != nil {
-			// Neither worked, return the original error
-			return fmt.Errorf("syntax error: %w", err)
-		}
-		// Package-level parsing worked, but we don't support function definitions
-		return fmt.Errorf("function definitions are not supported in code snippets")
+		// Return a more helpful error message
+		return fmt.Errorf("syntax error: %w", err)
 	}
 
-	// Check for unauthorized imports
+	// Check for unauthorized imports (should be none after extraction)
 	if err := ge.checkImports(code, authorizedImports); err != nil {
 		return fmt.Errorf("unauthorized import: %w", err)
 	}
@@ -223,6 +355,61 @@ func main() {
 	}
 
 	return nil
+}
+
+// extractAndRemoveImports extracts import statements from code and returns them along with cleaned code
+func (ge *GoExecutor) extractAndRemoveImports(code string) ([]string, string) {
+	var extractedImports []string
+	var cleanedLines []string
+	
+	// Regular expressions for different import formats
+	importLineRegex := regexp.MustCompile(`^\s*import\s+"([^"]+)"\s*$`)
+	importAliasRegex := regexp.MustCompile(`^\s*import\s+\w+\s+"([^"]+)"\s*$`)
+	importBlockStart := regexp.MustCompile(`^\s*import\s*\(\s*$`)
+	importBlockEnd := regexp.MustCompile(`^\s*\)\s*$`)
+	importInBlock := regexp.MustCompile(`^\s*(?:\w+\s+)?"([^"]+)"\s*$`)
+	
+	lines := strings.Split(code, "\n")
+	inImportBlock := false
+	
+	for _, line := range lines {
+		// Check if we're starting an import block
+		if importBlockStart.MatchString(line) {
+			inImportBlock = true
+			continue
+		}
+		
+		// Check if we're ending an import block
+		if inImportBlock && importBlockEnd.MatchString(line) {
+			inImportBlock = false
+			continue
+		}
+		
+		// Extract imports from within import block
+		if inImportBlock {
+			if matches := importInBlock.FindStringSubmatch(line); len(matches) > 1 {
+				extractedImports = append(extractedImports, matches[1])
+			}
+			continue
+		}
+		
+		// Check for single-line import
+		if matches := importLineRegex.FindStringSubmatch(line); len(matches) > 1 {
+			extractedImports = append(extractedImports, matches[1])
+			continue
+		}
+		
+		// Check for single-line import with alias
+		if matches := importAliasRegex.FindStringSubmatch(line); len(matches) > 1 {
+			extractedImports = append(extractedImports, matches[1])
+			continue
+		}
+		
+		// If not an import line, add to cleaned code
+		cleanedLines = append(cleanedLines, line)
+	}
+	
+	return extractedImports, strings.Join(cleanedLines, "\n")
 }
 
 // checkImports validates that only authorized imports are used
@@ -272,25 +459,39 @@ func (ge *GoExecutor) checkImports(code string, authorizedImports []string) erro
 
 // checkUnsafeOperations checks for potentially unsafe operations
 func (ge *GoExecutor) checkUnsafeOperations(code string) error {
-	unsafePatterns := []string{
-		`unsafe\.`,     // unsafe package usage
-		`syscall\.`,    // direct syscalls
-		`os\.Exit`,     // program termination
-		`panic\s*\(`,   // panic calls
-		`recover\s*\(`, // recover calls
+	// Always forbidden operations regardless of settings
+	alwaysUnsafePatterns := []string{
+		`unsafe\.`,        // unsafe package usage
+		`syscall\.`,       // direct syscalls  
+		`os\.Exit`,        // program termination
+		`panic\s*\(`,      // panic calls (except in controlled scenarios)
+		`recover\s*\(`,    // recover calls
+		`exec\.Command`,   // command execution
+		`exec\.CommandContext`, // command execution with context
+		`plugin\.`,        // plugin loading
+		`runtime\.SetFinalizer`, // finalizer manipulation
+		`reflect\.ValueOf\([^)]+\)\.UnsafePointer`, // unsafe pointer access
 	}
+
+	unsafePatterns := alwaysUnsafePatterns
 
 	if !ge.enableFileSystem {
 		unsafePatterns = append(unsafePatterns,
-			`os\.Create`, `os\.Open`, `os\.Remove`, `os\.Mkdir`,
-			`ioutil\.WriteFile`, `ioutil\.ReadFile`,
-			`filepath\.Walk`,
+			`os\.Create`, `os\.Open`, `os\.OpenFile`, `os\.Remove`, `os\.RemoveAll`,
+			`os\.Mkdir`, `os\.MkdirAll`, `os\.Chmod`, `os\.Chown`,
+			`os\.Rename`, `os\.Link`, `os\.Symlink`,
+			`ioutil\.WriteFile`, `ioutil\.ReadFile`, `ioutil\.TempFile`,
+			`filepath\.Walk`, `filepath\.WalkDir`,
+			`os\.ReadDir`, `os\.ReadFile`, `os\.WriteFile`,
 		)
 	}
 
 	if !ge.enableNetworking {
 		unsafePatterns = append(unsafePatterns,
-			`http\.`, `net\.`, `url\.`,
+			`net\.Dial`, `net\.Listen`, `net\.ListenPacket`,
+			`http\.Get`, `http\.Post`, `http\.NewRequest`,
+			`http\.ListenAndServe`, `http\.Serve`,
+			`smtp\.`, `rpc\.`, `mail\.`,
 		)
 	}
 
@@ -385,13 +586,23 @@ func (ge *GoExecutor) extractNewVariables(code string) ([]string, map[string]boo
 	// Visit all nodes to find variable declarations
 	ast.Inspect(funcBody, func(n ast.Node) bool {
 		switch x := n.(type) {
+		case *ast.FuncLit:
+			// Don't descend into function literals - their variables are local
+			return false
 		case *ast.AssignStmt:
 			if x.Tok == token.DEFINE {
 				// Process := assignments
 				processAssignment(x, existingVars, foundVars, &newVars)
 			} else if x.Tok == token.ASSIGN {
-				// Also process = assignments to undefined variables
-				processAssignment(x, existingVars, foundVars, &newVars)
+				// Process = assignments to track undefined variables that need declaration
+				for _, lhs := range x.Lhs {
+					if ident, ok := lhs.(*ast.Ident); ok && ident.Name != "_" {
+						if !existingVars[ident.Name] && !foundVars[ident.Name] {
+							foundVars[ident.Name] = true
+							newVars = append(newVars, ident.Name)
+						}
+					}
+				}
 			}
 		case *ast.DeclStmt:
 			// Process var declarations but mark them differently
@@ -414,6 +625,81 @@ func (ge *GoExecutor) extractNewVariables(code string) ([]string, map[string]boo
 	})
 
 	return newVars, varDeclVars, nil
+}
+
+// transformStandaloneFunctions transforms standalone function definitions to variable assignments
+func (ge *GoExecutor) transformStandaloneFunctions(code string) string {
+	// Pattern to match standalone function definitions like: func isPrime(n int) bool { ... }
+	// This now handles functions with or without return types
+	funcDefPattern := regexp.MustCompile(`(?ms)^(\s*)func\s+(\w+)\s*\(([^)]*)\)\s*([^{]*?)\s*\{`)
+	
+	// Find all function definitions
+	allMatches := funcDefPattern.FindAllStringSubmatchIndex(code, -1)
+	
+	// Process in reverse order to avoid position shifts
+	for i := len(allMatches) - 1; i >= 0; i-- {
+		match := funcDefPattern.FindStringSubmatch(code[allMatches[i][0]:])
+		if len(match) < 5 {
+			continue
+		}
+		
+		indent := match[1]
+		funcName := match[2]
+		params := match[3]
+		returnType := strings.TrimSpace(match[4])
+		
+		// Find the matching closing brace for this function
+		startPos := allMatches[i][0]
+		braceCount := 0
+		inString := false
+		escapeNext := false
+		funcEnd := startPos
+		
+		for j := startPos; j < len(code); j++ {
+			if escapeNext {
+				escapeNext = false
+				continue
+			}
+			
+			switch code[j] {
+			case '\\':
+				if inString {
+					escapeNext = true
+				}
+			case '"':
+				if !inString {
+					inString = true
+				} else {
+					inString = false
+				}
+			case '{':
+				if !inString {
+					braceCount++
+				}
+			case '}':
+				if !inString {
+					braceCount--
+					if braceCount == 0 {
+						funcEnd = j + 1
+						break
+					}
+				}
+			}
+			
+			if funcEnd != startPos {
+				break
+			}
+		}
+		
+		// Transform to variable assignment format
+		oldDecl := fmt.Sprintf(`%sfunc %s(%s) %s {`, indent, funcName, params, returnType)
+		newDecl := fmt.Sprintf(`%s%s := func(%s) %s {`, indent, funcName, params, returnType)
+		
+		// Replace in the code
+		code = code[:startPos] + strings.Replace(code[startPos:], oldDecl, newDecl, 1)
+	}
+	
+	return code
 }
 
 // transformFunctionVariables handles all function variable declarations,
@@ -519,6 +805,26 @@ func (ge *GoExecutor) transformVariableDeclarations(code string, declaredVars ma
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// isVariableInitializedWithLiteral checks if a variable is initialized with a literal value
+func (ge *GoExecutor) isVariableInitializedWithLiteral(varName, code string) bool {
+	// Check for literal number assignment
+	literalPatterns := []string{
+		fmt.Sprintf(`\b%s\s*:=\s*\d+`, varName),           // integer literal
+		fmt.Sprintf(`\b%s\s*:=\s*\d+\.\d+`, varName),    // float literal  
+		fmt.Sprintf(`\b%s\s*:=\s*"[^"]*"`, varName),      // string literal
+		fmt.Sprintf(`\b%s\s*:=\s*'[^']*'`, varName),        // char literal
+		fmt.Sprintf(`\b%s\s*:=\s*(?:true|false)`, varName), // bool literal
+	}
+	
+	for _, pattern := range literalPatterns {
+		if matched, _ := regexp.MatchString(pattern, code); matched {
+			return true
+		}
+	}
+	
+	return false
 }
 
 // generateTypeHelpers creates helper code for type conversions
@@ -719,7 +1025,6 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 		"csv":      "encoding/csv",
 		"md5":      "crypto/md5",
 		"sha1":     "crypto/sha1",
-		"sha256":   "crypto/sha256",
 		"gzip":     "compress/gzip",
 		"zip":      "archive/zip",
 		"url":      "net/url",
@@ -741,6 +1046,10 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 		"heap":     "container/heap",
 		"reflect":  "reflect",
 		"os":       "os",
+		"crypto":   "crypto",
+		"sha256":   "crypto/sha256",
+		"cmplx":    "math/cmplx",
+		"big":      "math/big",
 	}
 
 	// Always include these core imports
@@ -792,16 +1101,20 @@ func (ge *GoExecutor) detectUsedImports(code string, availableImports []string) 
 // buildProgram creates a complete Go program from the code snippet
 // prepareVariablesAndCode extracts variables and transforms code
 func (ge *GoExecutor) prepareVariablesAndCode(code string) ([]string, map[string]bool, string, map[string]bool) {
+	// Transform standalone functions first
+	code = ge.transformStandaloneFunctions(code)
+	
 	newVars, varDeclVars, _ := ge.extractNewVariables(code)
 	code = ge.transformFunctionVariables(code)
 	
+	// Only mark existing variables as declared, not new ones
+	// This ensures new variables keep their := syntax
 	declaredVars := make(map[string]bool)
 	for name := range ge.variables {
 		declaredVars[name] = true
 	}
-	for _, name := range newVars {
-		declaredVars[name] = true
-	}
+	// Don't add newVars to declaredVars - let them use :=
+	
 	transformedCode := ge.transformVariableDeclarations(code, declaredVars)
 	
 	return newVars, varDeclVars, transformedCode, declaredVars
@@ -897,6 +1210,8 @@ func (ge *GoExecutor) identifyFunctionVariables(code, transformedCode string, ne
 		}
 		
 		if !isFuncVar {
+			// Pre-declare variables to support auto-declaration behavior
+			// This allows code like "result = 5" without explicit declaration
 			nonFuncDeclarations = append(nonFuncDeclarations,
 				fmt.Sprintf("var %s interface{}", varName))
 		}
@@ -906,41 +1221,48 @@ func (ge *GoExecutor) identifyFunctionVariables(code, transformedCode string, ne
 }
 
 // buildVariableCaptures creates the variable capture map
-func (ge *GoExecutor) buildVariableCaptures(newVars []string, funcVarTypes map[string]string, transformedCode string) string {
-	allVars := make([]string, 0, len(ge.variables)+len(newVars))
+func (ge *GoExecutor) buildVariableCaptures(newVars []string, funcVarTypes map[string]string, transformedCode string) (string, []string) {
+	// Only capture existing variables from previous executions
+	// New variables will be handled differently
+	var captureCode []string
+	var allCapturedVars []string
+	
+	// Only add existing variables from previous executions
 	for name := range ge.variables {
-		allVars = append(allVars, name)
-	}
-	allVars = append(allVars, newVars...)
-	
-	funcVars := make(map[string]bool)
-	for _, varName := range allVars {
-		if _, isFunc := funcVarTypes[varName]; isFunc {
-			funcVars[varName] = true
-		} else {
-			funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, varName))
-			varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, varName))
-			if funcPattern.MatchString(transformedCode) || varFuncPattern.MatchString(transformedCode) {
-				funcVars[varName] = true
-			}
-		}
-	}
-	
-	var variableCaptures []string
-	for _, name := range allVars {
-		if !funcVars[name] {
-			variableCaptures = append(variableCaptures,
+		// Skip function variables
+		funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, name))
+		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, name))
+		if !funcPattern.MatchString(transformedCode) && !varFuncPattern.MatchString(transformedCode) {
+			captureCode = append(captureCode,
 				fmt.Sprintf(`"%s": %s`, name, name))
+			allCapturedVars = append(allCapturedVars, name)
 		}
 	}
 	
-	if len(variableCaptures) == 0 {
-		return ""
-	} else if len(variableCaptures) == 1 {
-		return variableCaptures[0]
-	} else {
-		return "\n\t\t" + strings.Join(variableCaptures, ",\n\t\t") + ",\n\t"
+	// Track new variables separately for later capture
+	var newNonFuncVars []string
+	for _, name := range newVars {
+		// Skip function variables
+		if _, isFunc := funcVarTypes[name]; isFunc {
+			continue
+		}
+		funcPattern := regexp.MustCompile(fmt.Sprintf(`\b%s\s*:=\s*func\s*\(`, name))
+		varFuncPattern := regexp.MustCompile(fmt.Sprintf(`\bvar\s+%s\s+func\s*\(`, name))
+		if !funcPattern.MatchString(transformedCode) && !varFuncPattern.MatchString(transformedCode) {
+			newNonFuncVars = append(newNonFuncVars, name)
+		}
 	}
+	
+	var captureStr string
+	if len(captureCode) == 0 {
+		captureStr = ""
+	} else if len(captureCode) == 1 {
+		captureStr = captureCode[0]
+	} else {
+		captureStr = "\n\t\t" + strings.Join(captureCode, ",\n\t\t") + ",\n\t"
+	}
+	
+	return captureStr, newNonFuncVars
 }
 
 func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (string, error) {
@@ -962,7 +1284,19 @@ func (ge *GoExecutor) buildProgram(code string, authorizedPackages []string) (st
 	variableDeclarations = append(variableDeclarations, nonFuncDeclarations...)
 	
 	// Build variable captures
-	variableCapturesStr := ge.buildVariableCaptures(newVars, funcVarTypes, transformedCode)
+	variableCapturesStr, newNonFuncVars := ge.buildVariableCaptures(newVars, funcVarTypes, transformedCode)
+	
+	// Build list of new variables to track
+	var newVarsList []string
+	var newVarCases []string
+	for _, varName := range newNonFuncVars {
+		newVarsList = append(newVarsList, fmt.Sprintf(`"%s"`, varName))
+		// Generate case for capturing this variable
+		newVarCases = append(newVarCases, fmt.Sprintf(`case "%s":
+			variables["%s"] = %s`, varName, varName, varName))
+	}
+	newVarsStr := strings.Join(newVarsList, ", ")
+	newVarCasesStr := strings.Join(newVarCases, "\n\t\t")
 
 	// Build the complete program
 	program := fmt.Sprintf(`package main
@@ -975,6 +1309,9 @@ import (
 
 // Global print output buffer
 var printBuffer bytes.Buffer
+
+// List of new variables to track
+var newVariableNames = []string{%s}
 
 // Custom fmt wrapper to capture print output
 type customFmt struct{}
@@ -1012,7 +1349,7 @@ func final_answer(answer interface{}) {
 	output := map[string]interface{}{
 		"is_final_answer": true,
 		"final_answer": answer,
-		"variables": getCurrentVariables(),
+		"variables": map[string]interface{}{}, // Variables will be captured at end of execution
 		"logs": printBuffer.String(),
 	}
 	
@@ -1027,7 +1364,9 @@ func final_answer(answer interface{}) {
 }
 
 func getCurrentVariables() map[string]interface{} {
-	return map[string]interface{}{%s}
+	vars := map[string]interface{}{%s}
+	// Note: new variables defined in code are captured after execution
+	return vars
 }
 
 func main() {
@@ -1044,6 +1383,14 @@ func main() {
 	
 	// Capture variables state
 	variables := getCurrentVariables()
+	
+	// Capture new variables defined in this execution
+	for _, varName := range newVariableNames {
+		// Capture each new variable
+		switch varName {
+		%s
+		}
+	}
 	
 	// Determine the result value
 	var outputResult interface{}
@@ -1069,9 +1416,11 @@ func main() {
 }`,
 		strings.Join(imports, "\n\t"),
 		strings.Join(variableDeclarations, "\n"),
+		newVarsStr,
 		ge.generateTypeHelpers(),
 		variableCapturesStr,
 		transformedCode,
+		newVarCasesStr,
 	)
 
 	return program, nil

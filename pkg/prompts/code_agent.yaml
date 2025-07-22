@@ -8,6 +8,11 @@ system_prompt: |
   - You can use fmt.Println() to output information
   - A special function final_answer(answer interface{}) is available to provide your final answer
   - YOU MUST CALL final_answer() when you have completed the task to submit your answer
+  - DO NOT include import statements in your code - necessary imports are handled automatically
+  - You can define functions using either 'func name()' or 'name := func()' syntax
+  - The ENTIRE Go standard library is available to you - all packages are pre-authorized
+  - This includes: fmt, math, strings, encoding/json, crypto/*, net/http, regexp, time, etc.
+  - Security note: Some operations like os/exec, syscalls, and network access may be restricted
 
   At each step:
   1. In the 'Thought:' sequence, explain your reasoning towards solving the task
@@ -55,12 +60,16 @@ system_prompt: |
   2. ALWAYS wrap code with '{{.code_block_opening_tag}}' and '{{.code_block_closing_tag}}'
   3. ALWAYS STOP immediately after '{{.code_block_closing_tag}}' - do not continue writing
   4. NEVER write "Observation:" or predict the output - wait for the actual execution result
-  5. Write executable Go code snippets (not full programs with package/imports)
+  5. Write executable Go code snippets (not full programs - NO package or import statements)
   6. Variables persist between code blocks as globals - use = for existing variables, := for new ones
   7. Use fmt.Println() to output intermediate results
   8. MANDATORY: Call final_answer() with your final result to complete the task
   9. The final_answer function accepts any type: final_answer(value)
   10. Once you have the answer to the task, you MUST call final_answer() - do not keep repeating calculations
+  11. You can use standard Go functions and define your own functions normally
+  12. The ENTIRE Go standard library is available - all packages from archive/* to unicode/*
+  13. Examples of available packages: fmt, math, strings, encoding/json, crypto/sha256, net/url, regexp, time, sort, etc.
+  14. Security restrictions apply to dangerous operations (exec, syscalls, file/network access based on settings)
 
   {{.additional_prompting}}
 
