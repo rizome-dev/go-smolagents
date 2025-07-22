@@ -1,5 +1,7 @@
 # go-smolagents
 
+<img src="logo.png" alt="Logo" width="300" align="right">
+
 [![GoDoc](https://pkg.go.dev/badge/github.com/rizome-dev/go-smolagents)](https://pkg.go.dev/github.com/rizome-dev/go-smolagents)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rizome-dev/go-smolagents)](https://goreportcard.com/report/github.com/rizome-dev/go-smolagents)
 
