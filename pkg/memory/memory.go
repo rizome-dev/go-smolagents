@@ -219,77 +219,101 @@ func (as *ActionStep) GetType() string {
 	return "action"
 }
 
+// addModelOutputMessages adds model output messages if applicable
+func (as *ActionStep) addModelOutputMessages(messages *[]Message, summaryMode bool) {
+	if summaryMode {
+		return
+	}
+
+	if as.ModelOutput != "" {
+		*messages = append(*messages, *NewMessage(models.RoleAssistant, as.ModelOutput))
+	} else if as.ModelOutputMessage != nil && as.ModelOutputMessage.Content != nil && *as.ModelOutputMessage.Content != "" {
+		*messages = append(*messages, *NewMessage(models.RoleAssistant, *as.ModelOutputMessage.Content))
+	}
+}
+
+// addToolCallMessages adds tool call messages if any
+func (as *ActionStep) addToolCallMessages(messages *[]Message) {
+	if len(as.ToolCalls) == 0 {
+		return
+	}
+
+	toolCallContent := "Calling tools:\n"
+	for _, toolCall := range as.ToolCalls {
+		toolCallContent += fmt.Sprintf("- %s: %v\n", toolCall.Name, toolCall.Arguments)
+	}
+	*messages = append(*messages, *NewMessage(models.RoleToolCall, toolCallContent))
+}
+
+// addObservationImageMessages adds observation image messages if any
+func (as *ActionStep) addObservationImageMessages(messages *[]Message) {
+	if len(as.ObservationImages) == 0 {
+		return
+	}
+
+	content := []map[string]interface{}{
+		{
+			"type": "text",
+			"text": "Observation images:",
+		},
+	}
+
+	for _, img := range as.ObservationImages {
+		if img.Type == models.MediaTypeImage && img.ImageURL != nil {
+			content = append(content, map[string]interface{}{
+				"type": "image_url",
+				"image_url": map[string]interface{}{
+					"url":    img.ImageURL.URL,
+					"detail": img.ImageURL.Detail,
+				},
+			})
+		}
+	}
+
+	imageMessage := &Message{
+		Role:    models.RoleUser,
+		Content: content,
+	}
+	*messages = append(*messages, *imageMessage)
+}
+
+// addObservationMessages adds observation messages if any
+func (as *ActionStep) addObservationMessages(messages *[]Message) {
+	if as.Observations == "" {
+		return
+	}
+	*messages = append(*messages, *NewMessage(models.RoleToolResponse, "Observation:\n"+as.Observations))
+}
+
+// addErrorMessages adds error messages if any
+func (as *ActionStep) addErrorMessages(messages *[]Message) {
+	if as.Error == nil {
+		return
+	}
+
+	errorText := "Error:\n" + as.Error.Error() +
+		"\nNow let's retry: take care not to repeat previous errors! " +
+		"If you have retried several times, try a completely different approach.\n"
+
+	messageContent := ""
+	if len(as.ToolCalls) > 0 {
+		messageContent = fmt.Sprintf("Call id: %s\n", as.ToolCalls[0].ID)
+	}
+	messageContent += errorText
+	
+	*messages = append(*messages, *NewMessage(models.RoleToolResponse, messageContent))
+}
+
 // ToMessages implements MemoryStep
 func (as *ActionStep) ToMessages(summaryMode bool) ([]Message, error) {
 	var messages []Message
 
-	// Add model output if available and not in summary mode
-	if as.ModelOutput != "" && !summaryMode {
-		messages = append(messages, *NewMessage(models.RoleAssistant, as.ModelOutput))
-	} else if !summaryMode && as.ModelOutputMessage != nil && as.ModelOutputMessage.Content != nil && *as.ModelOutputMessage.Content != "" {
-		// If ModelOutput is empty but we have a ModelOutputMessage with content, use that
-		messages = append(messages, *NewMessage(models.RoleAssistant, *as.ModelOutputMessage.Content))
-	}
-
-	// Add tool calls if any
-	if len(as.ToolCalls) > 0 {
-		// For tool calling agents, create a tool call message
-		toolCallContent := "Calling tools:\n"
-		for _, toolCall := range as.ToolCalls {
-			toolCallContent += fmt.Sprintf("- %s: %v\n", toolCall.Name, toolCall.Arguments)
-		}
-		messages = append(messages, *NewMessage(models.RoleToolCall, toolCallContent))
-	}
-
-	// Add observation images if any
-	if len(as.ObservationImages) > 0 {
-		// Create content array with text and images
-		content := []map[string]interface{}{
-			{
-				"type": "text",
-				"text": "Observation images:",
-			},
-		}
-
-		// Add each image to content
-		for _, img := range as.ObservationImages {
-			if img.Type == models.MediaTypeImage && img.ImageURL != nil {
-				content = append(content, map[string]interface{}{
-					"type": "image_url",
-					"image_url": map[string]interface{}{
-						"url":    img.ImageURL.URL,
-						"detail": img.ImageURL.Detail,
-					},
-				})
-			}
-		}
-
-		imageMessage := &Message{
-			Role:    models.RoleUser,
-			Content: content,
-		}
-		messages = append(messages, *imageMessage)
-	}
-
-	// Add observations if any
-	if as.Observations != "" {
-		messages = append(messages, *NewMessage(models.RoleToolResponse, "Observation:\n"+as.Observations))
-	}
-
-	// Add error if any
-	if as.Error != nil {
-		errorText := "Error:\n" + as.Error.Error() +
-			"\nNow let's retry: take care not to repeat previous errors! " +
-			"If you have retried several times, try a completely different approach.\n"
-
-		messageContent := ""
-		if len(as.ToolCalls) > 0 {
-			messageContent = fmt.Sprintf("Call id: %s\n", as.ToolCalls[0].ID)
-		}
-		messageContent += errorText
-
-		messages = append(messages, *NewMessage(models.RoleToolResponse, messageContent))
-	}
+	// Add various message types
+	as.addModelOutputMessages(&messages, summaryMode)
+	as.addToolCallMessages(&messages)
+	as.addObservationImageMessages(&messages)
+	as.addObservationMessages(&messages)
+	as.addErrorMessages(&messages)
 
 	return messages, nil
 }

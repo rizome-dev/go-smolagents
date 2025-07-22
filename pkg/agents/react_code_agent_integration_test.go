@@ -275,7 +275,7 @@ func TestCodeLengthLimits(t *testing.T) {
 		}
 		defer agent.Close()
 
-		result, err := agent.Run(&RunOptions{
+		result, _ := agent.Run(&RunOptions{
 			Task: "test",
 		})
 

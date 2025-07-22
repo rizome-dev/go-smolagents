@@ -67,131 +67,180 @@ func NewParserWithTags(openTag, closeTag string) *Parser {
 }
 
 // Parse analyzes an LLM response and extracts structured information
-func (p *Parser) Parse(response string) *ParseResult {
-	// Defensive programming - handle nil/empty responses
+// validateResponse checks if response is empty
+func (p *Parser) validateResponse(response string) (*ParseResult, string) {
 	if response == "" {
 		return &ParseResult{
 			Type:    "error",
 			Content: "empty response",
 			Error:   fmt.Errorf("received empty response from model"),
-		}
+		}, ""
 	}
+	return nil, strings.TrimSpace(response)
+}
 
-	// Trim whitespace for cleaner parsing
-	response = strings.TrimSpace(response)
-
-	// Check for error first
+// checkForError checks if response contains an error pattern
+func (p *Parser) checkForError(response string) *ParseResult {
 	if errorMatch := p.errorPattern.FindStringSubmatch(response); len(errorMatch) > 1 {
 		return &ParseResult{
 			Type:    "error",
 			Content: strings.TrimSpace(errorMatch[1]),
 		}
 	}
+	return nil
+}
 
-	// Try to extract code blocks first
-	code := p.ExtractCode(response)
-
-	// Extract thought - either from explicit "Thought:" prefix or from text before code
-	thought := ""
+// extractThought extracts thought from the response
+func (p *Parser) extractThought(response, code string) string {
+	// Check explicit thought pattern
 	if thoughtMatch := p.thoughtPattern.FindStringSubmatch(response); len(thoughtMatch) > 1 {
-		thought = strings.TrimSpace(thoughtMatch[1])
-	} else if code != "" {
-		// If we have code but no explicit thought pattern, treat everything before the code as thought
+		return strings.TrimSpace(thoughtMatch[1])
+	}
+	
+	// If we have code but no explicit thought, extract text before code
+	if code != "" {
 		codeStartIdx := strings.Index(response, p.codeBlockTags[0])
 		if codeStartIdx > 0 {
-			thought = strings.TrimSpace(response[:codeStartIdx])
-			// Clean up the thought - remove any trailing punctuation or incomplete sentences
-			thought = cleanThought(thought)
+			thought := strings.TrimSpace(response[:codeStartIdx])
+			return cleanThought(thought)
 		}
-	} else {
-		// No code found, try to extract implicit thought patterns
-		thought = extractImplicitThought(response)
 	}
+	
+	// No code found, try implicit patterns
+	return extractImplicitThought(response)
+}
 
-	// If we found code blocks, process them
-	if code != "" {
-		// Validate the code is not just whitespace
-		if strings.TrimSpace(code) == "" {
-			return &ParseResult{
-				Type:    "error",
-				Thought: thought,
-				Content: "empty code block",
-				Error:   fmt.Errorf("code block contains only whitespace"),
-			}
-		}
-
-		// Always treat code blocks as code that needs execution
-		// The final_answer() function will be handled during execution
+// parseCodeBlock handles code block parsing
+func (p *Parser) parseCodeBlock(code, thought string) *ParseResult {
+	if code == "" {
+		return nil
+	}
+	
+	// Validate code is not just whitespace
+	if strings.TrimSpace(code) == "" {
 		return &ParseResult{
-			Type:    "code",
+			Type:    "error",
 			Thought: thought,
-			Content: code,
+			Content: "empty code block",
+			Error:   fmt.Errorf("code block contains only whitespace"),
 		}
 	}
+	
+	return &ParseResult{
+		Type:    "code",
+		Thought: thought,
+		Content: code,
+	}
+}
 
-	// Check for action format (tool calling)
-	if actionMatch := p.actionPattern.FindStringSubmatch(response); len(actionMatch) > 1 {
-		actionJSON := actionMatch[1]
-		// Clean up JSON if it's in code block
-		actionJSON = p.cleanJSON(actionJSON)
-
-		var action map[string]interface{}
-		if err := json.Unmarshal([]byte(actionJSON), &action); err != nil {
-			return &ParseResult{
-				Type:    "error",
-				Thought: thought,
-				Error:   fmt.Errorf("failed to parse action JSON: %w", err),
-			}
-		}
-
-		// Validate action has required fields
-		if _, hasName := action["name"]; !hasName {
-			return &ParseResult{
-				Type:    "error",
-				Thought: thought,
-				Error:   fmt.Errorf("action missing 'name' field"),
-			}
-		}
-
-		// Check if it's a final answer action
-		if name, ok := action["name"].(string); ok && name == "final_answer" {
-			return &ParseResult{
-				Type:    "final_answer",
-				Thought: thought,
-				Content: actionJSON,
-				Action:  action,
-			}
-		}
-
+// parseAction handles action/tool calling parsing
+func (p *Parser) parseAction(response, thought string) *ParseResult {
+	actionMatch := p.actionPattern.FindStringSubmatch(response)
+	if len(actionMatch) <= 1 {
+		return nil
+	}
+	
+	actionJSON := p.cleanJSON(actionMatch[1])
+	var action map[string]interface{}
+	
+	if err := json.Unmarshal([]byte(actionJSON), &action); err != nil {
 		return &ParseResult{
-			Type:    "action",
+			Type:    "error",
+			Thought: thought,
+			Error:   fmt.Errorf("failed to parse action JSON: %w", err),
+		}
+	}
+	
+	// Validate action
+	if _, hasName := action["name"]; !hasName {
+		return &ParseResult{
+			Type:    "error",
+			Thought: thought,
+			Error:   fmt.Errorf("action missing 'name' field"),
+		}
+	}
+	
+	// Check if final answer
+	if name, ok := action["name"].(string); ok && name == "final_answer" {
+		return &ParseResult{
+			Type:    "final_answer",
 			Thought: thought,
 			Content: actionJSON,
 			Action:  action,
 		}
 	}
+	
+	return &ParseResult{
+		Type:    "action",
+		Thought: thought,
+		Content: actionJSON,
+		Action:  action,
+	}
+}
 
-	// Check for structured JSON response
-	if jsonMatch := p.jsonPattern.FindStringSubmatch(response); len(jsonMatch) > 0 {
-		jsonStr := p.cleanJSON(jsonMatch[0])
-		var structured map[string]interface{}
-		if err := json.Unmarshal([]byte(jsonStr), &structured); err == nil {
-			// Check if it has thought and code fields (structured code agent)
-			if _, hasThought := structured["thought"]; hasThought {
-				if _, hasCode := structured["code"]; hasCode {
-					return &ParseResult{
-						Type:    "structured",
-						Thought: getString(structured, "thought"),
-						Content: getString(structured, "code"),
-						Action:  structured,
-					}
-				}
-			}
+// parseStructuredJSON handles structured JSON response parsing
+func (p *Parser) parseStructuredJSON(response string) *ParseResult {
+	jsonMatch := p.jsonPattern.FindStringSubmatch(response)
+	if len(jsonMatch) == 0 {
+		return nil
+	}
+	
+	jsonStr := p.cleanJSON(jsonMatch[0])
+	var structured map[string]interface{}
+	
+	if err := json.Unmarshal([]byte(jsonStr), &structured); err != nil {
+		return nil
+	}
+	
+	// Check for structured code agent format
+	_, hasThought := structured["thought"]
+	_, hasCode := structured["code"]
+	
+	if hasThought && hasCode {
+		return &ParseResult{
+			Type:    "structured",
+			Thought: getString(structured, "thought"),
+			Content: getString(structured, "code"),
+			Action:  structured,
 		}
 	}
+	
+	return nil
+}
 
-	// If nothing matched, analyze the content more carefully
-	// Check if it might be a final answer in plain text
+func (p *Parser) Parse(response string) *ParseResult {
+	// Validate response
+	if result, cleanResponse := p.validateResponse(response); result != nil {
+		return result
+	} else {
+		response = cleanResponse
+	}
+
+	// Check for error patterns
+	if result := p.checkForError(response); result != nil {
+		return result
+	}
+
+	// Extract code and thought
+	code := p.ExtractCode(response)
+	thought := p.extractThought(response, code)
+
+	// Try parsing as code block
+	if result := p.parseCodeBlock(code, thought); result != nil {
+		return result
+	}
+
+	// Try parsing as action
+	if result := p.parseAction(response, thought); result != nil {
+		return result
+	}
+
+	// Try parsing as structured JSON
+	if result := p.parseStructuredJSON(response); result != nil {
+		return result
+	}
+
+	// Check if it's a final answer in plain text
 	if looksLikeFinalAnswer(response) {
 		return &ParseResult{
 			Type:    "final_answer",
@@ -200,7 +249,7 @@ func (p *Parser) Parse(response string) *ParseResult {
 		}
 	}
 
-	// Return as raw response with any extracted thought
+	// Return as raw response
 	return &ParseResult{
 		Type:    "raw",
 		Thought: thought,
@@ -208,9 +257,8 @@ func (p *Parser) Parse(response string) *ParseResult {
 	}
 }
 
-// ExtractCode extracts code from between code block tags
-func (p *Parser) ExtractCode(text string) string {
-	// First try to find complete code blocks
+// extractCompleteCodeBlocks extracts code from complete code blocks
+func (p *Parser) extractCompleteCodeBlocks(text string) string {
 	pattern := fmt.Sprintf(`(?s)%s(.*?)%s`,
 		regexp.QuoteMeta(p.codeBlockTags[0]),
 		regexp.QuoteMeta(p.codeBlockTags[1]))
@@ -219,7 +267,6 @@ func (p *Parser) ExtractCode(text string) string {
 	matches := re.FindAllStringSubmatch(text, -1)
 
 	if len(matches) > 0 {
-		// Join all code blocks with newlines
 		var codes []string
 		for _, match := range matches {
 			if len(match) > 1 {
@@ -228,46 +275,47 @@ func (p *Parser) ExtractCode(text string) string {
 		}
 		return strings.Join(codes, "\n\n")
 	}
+	return ""
+}
 
-	// Fallback to markdown pattern if no matches found (similar to Python implementation)
+// extractMarkdownCodeBlocks extracts code from markdown blocks
+func extractMarkdownCodeBlocks(text string) string {
 	markdownPattern := `(?s)` + "```(?:go|golang)?\\s*\n(.*?)\n```"
 	markdownRe := regexp.MustCompile(markdownPattern)
-	markdownMatches := markdownRe.FindAllStringSubmatch(text, -1)
+	matches := markdownRe.FindAllStringSubmatch(text, -1)
 
-	if len(markdownMatches) > 0 {
-		// Join all markdown code blocks with newlines
+	if len(matches) > 0 {
 		var codes []string
-		for _, match := range markdownMatches {
+		for _, match := range matches {
 			if len(match) > 1 {
 				codes = append(codes, strings.TrimSpace(match[1]))
 			}
 		}
 		return strings.Join(codes, "\n\n")
 	}
+	return ""
+}
 
-	// If no complete blocks found, check for incomplete blocks (missing closing tag)
-	// This handles cases where the LLM stops generating before the closing tag
+// extractIncompleteCodeBlock extracts code from incomplete blocks
+func (p *Parser) extractIncompleteCodeBlock(text string) string {
+	// Check for incomplete custom tag blocks
 	openTag := p.codeBlockTags[0]
 	if idx := strings.LastIndex(text, openTag); idx >= 0 {
-		// Extract everything after the opening tag
 		code := text[idx+len(openTag):]
-		// Trim any trailing whitespace
 		code = strings.TrimSpace(code)
 		if code != "" {
 			return code
 		}
 	}
-
-	// Also check for incomplete markdown blocks
+	
+	// Check for incomplete markdown blocks
 	if idx := strings.LastIndex(text, "```"); idx >= 0 {
-		// Check if it's the start of a code block
 		afterTicks := text[idx+3:]
-		// Skip language identifier if present
 		lines := strings.Split(afterTicks, "\n")
+		
 		if len(lines) > 0 {
 			firstLine := strings.TrimSpace(lines[0])
 			if firstLine == "go" || firstLine == "golang" || firstLine == "" {
-				// It's a code block start
 				if len(lines) > 1 {
 					code := strings.Join(lines[1:], "\n")
 					code = strings.TrimSpace(code)
@@ -278,8 +326,24 @@ func (p *Parser) ExtractCode(text string) string {
 			}
 		}
 	}
-
+	
 	return ""
+}
+
+// ExtractCode extracts code from between code block tags
+func (p *Parser) ExtractCode(text string) string {
+	// Try complete code blocks first
+	if code := p.extractCompleteCodeBlocks(text); code != "" {
+		return code
+	}
+	
+	// Try markdown blocks
+	if code := extractMarkdownCodeBlocks(text); code != "" {
+		return code
+	}
+	
+	// Try incomplete blocks as fallback
+	return p.extractIncompleteCodeBlock(text)
 }
 
 // ExtractAction extracts action JSON from text

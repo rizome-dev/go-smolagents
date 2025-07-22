@@ -454,6 +454,71 @@ func (bm *BaseModel) ToDict() map[string]interface{} {
 	return result
 }
 
+// addDefaultParams adds default parameters to kwargs
+func (bm *BaseModel) addDefaultParams(kwargs map[string]interface{}, defaultParams map[string]interface{}) {
+	for k, v := range defaultParams {
+		kwargs[k] = v
+	}
+}
+
+// addGenerationOptions adds generation-related options to kwargs
+func (bm *BaseModel) addGenerationOptions(kwargs map[string]interface{}, options *GenerateOptions) {
+	if options == nil {
+		return
+	}
+
+	if options.MaxTokens != nil {
+		kwargs["max_tokens"] = *options.MaxTokens
+	}
+	if options.Temperature != nil {
+		kwargs["temperature"] = *options.Temperature
+	}
+	if options.TopP != nil {
+		kwargs["top_p"] = *options.TopP
+	}
+	if options.TopK != nil {
+		kwargs["top_k"] = *options.TopK
+	}
+	if options.FrequencyPenalty != nil {
+		kwargs["frequency_penalty"] = *options.FrequencyPenalty
+	}
+	if options.PresencePenalty != nil {
+		kwargs["presence_penalty"] = *options.PresencePenalty
+	}
+	if options.Seed != nil {
+		kwargs["seed"] = *options.Seed
+	}
+	if len(options.StopSequences) > 0 && SupportsStopParameter(bm.ModelID) {
+		kwargs["stop"] = options.StopSequences
+	}
+
+	// Add custom parameters
+	for k, v := range options.CustomParams {
+		kwargs[k] = v
+	}
+}
+
+// addResponseFormat adds response format to kwargs
+func (bm *BaseModel) addResponseFormat(kwargs map[string]interface{}, options *GenerateOptions) {
+	if options == nil {
+		return
+	}
+
+	// Prefer structured format over raw
+	if options.ResponseFormat != nil {
+		kwargs["response_format"] = bm.ConvertResponseFormat(options.ResponseFormat)
+	} else if options.ResponseFormatRaw != nil {
+		kwargs["response_format"] = options.ResponseFormatRaw
+	}
+}
+
+// addPriorityParams adds priority parameters that override everything
+func (bm *BaseModel) addPriorityParams(kwargs map[string]interface{}, priorityParams map[string]interface{}) {
+	for k, v := range priorityParams {
+		kwargs[k] = v
+	}
+}
+
 // PrepareCompletionKwargs prepares keyword arguments for model completion
 func (bm *BaseModel) PrepareCompletionKwargs(
 	options *GenerateOptions,
@@ -462,55 +527,11 @@ func (bm *BaseModel) PrepareCompletionKwargs(
 ) map[string]interface{} {
 	kwargs := make(map[string]interface{})
 
-	// Start with default parameters
-	for k, v := range defaultParams {
-		kwargs[k] = v
-	}
-
-	// Add parameters from options
-	if options != nil {
-		if options.MaxTokens != nil {
-			kwargs["max_tokens"] = *options.MaxTokens
-		}
-		if options.Temperature != nil {
-			kwargs["temperature"] = *options.Temperature
-		}
-		if options.TopP != nil {
-			kwargs["top_p"] = *options.TopP
-		}
-		if options.TopK != nil {
-			kwargs["top_k"] = *options.TopK
-		}
-		if options.FrequencyPenalty != nil {
-			kwargs["frequency_penalty"] = *options.FrequencyPenalty
-		}
-		if options.PresencePenalty != nil {
-			kwargs["presence_penalty"] = *options.PresencePenalty
-		}
-		if options.Seed != nil {
-			kwargs["seed"] = *options.Seed
-		}
-		if len(options.StopSequences) > 0 && SupportsStopParameter(bm.ModelID) {
-			kwargs["stop"] = options.StopSequences
-		}
-
-		// Handle response format - prefer structured format over raw
-		if options.ResponseFormat != nil {
-			kwargs["response_format"] = bm.ConvertResponseFormat(options.ResponseFormat)
-		} else if options.ResponseFormatRaw != nil {
-			kwargs["response_format"] = options.ResponseFormatRaw
-		}
-
-		// Add custom parameters
-		for k, v := range options.CustomParams {
-			kwargs[k] = v
-		}
-	}
-
-	// Priority parameters override everything
-	for k, v := range priorityParams {
-		kwargs[k] = v
-	}
+	// Add parameters in order of precedence
+	bm.addDefaultParams(kwargs, defaultParams)
+	bm.addGenerationOptions(kwargs, options)
+	bm.addResponseFormat(kwargs, options)
+	bm.addPriorityParams(kwargs, priorityParams)
 
 	return kwargs
 }

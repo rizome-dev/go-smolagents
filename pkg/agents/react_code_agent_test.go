@@ -240,7 +240,7 @@ x = x + 1
 
 		// Run agent
 		maxSteps := 2
-		result, err := agent.Run(&RunOptions{
+		result, _ := agent.Run(&RunOptions{
 			Task:     "Never-ending task",
 			MaxSteps: &maxSteps,
 		})
@@ -311,7 +311,7 @@ time.Sleep(5 * time.Second)
 		defer cancel()
 
 		// Run agent
-		result, err := agent.Run(&RunOptions{
+		result, _ := agent.Run(&RunOptions{
 			Task:    "Long running task",
 			Context: ctx,
 		})

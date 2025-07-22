@@ -182,14 +182,14 @@ func NewReactCodeAgent(
 }
 
 // Run implements the ReAct reasoning loop for code execution
-func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
+// prepareRunContext sets up the initial context and state for execution
+func (rca *ReactCodeAgent) prepareRunContext(options *RunOptions) (context.Context, *RunResult, error) {
 	if options == nil {
-		return nil, utils.NewAgentError("run options cannot be nil")
+		return nil, nil, utils.NewAgentError("run options cannot be nil")
 	}
 
 	// Set running state
 	rca.isRunning = true
-	defer func() { rca.isRunning = false }()
 
 	// Start timing
 	result := NewRunResult()
@@ -198,7 +198,7 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	if options.Reset {
 		rca.Reset()
 		if err := rca.goExecutor.Reset(); err != nil {
-			return nil, fmt.Errorf("failed to reset executor: %w", err)
+			return nil, nil, fmt.Errorf("failed to reset executor: %w", err)
 		}
 	}
 
@@ -208,20 +208,96 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 		ctx = context.Background()
 	}
 
-	// Add task to memory
-	// Convert images if provided
+	return ctx, result, nil
+}
+
+// processTaskImages converts and loads images from options
+func (rca *ReactCodeAgent) processTaskImages(images []interface{}) []*models.MediaContent {
 	var taskImages []*models.MediaContent
-	if len(options.Images) > 0 {
-		for _, img := range options.Images {
-			// Assume images are provided as URLs or base64 strings
-			if imgStr, ok := img.(string); ok {
-				mediaContent, _ := models.LoadImageURL(imgStr, "auto")
-				if mediaContent != nil {
-					taskImages = append(taskImages, mediaContent)
-				}
+	for _, img := range images {
+		if imgStr, ok := img.(string); ok {
+			mediaContent, _ := models.LoadImageURL(imgStr, "auto")
+			if mediaContent != nil {
+				taskImages = append(taskImages, mediaContent)
 			}
 		}
 	}
+	return taskImages
+}
+
+// checkStepConditions checks interruption and context cancellation
+func (rca *ReactCodeAgent) checkStepConditions(ctx context.Context, result *RunResult) bool {
+	// Check for interruption
+	if rca.interrupted {
+		result.State = "interrupted"
+		result.Error = utils.NewAgentExecutionError("agent execution was interrupted")
+		return false
+	}
+
+	// Check context cancellation
+	select {
+	case <-ctx.Done():
+		result.State = "cancelled"
+		result.Error = ctx.Err()
+		return false
+	default:
+		return true
+	}
+}
+
+// executeStepCallbacks runs step callbacks if provided
+func (rca *ReactCodeAgent) executeStepCallbacks(options *RunOptions, result *RunResult) error {
+	if len(options.StepCallbacks) == 0 {
+		return nil
+	}
+
+	latestStep := rca.memory.GetLastStep()
+	if latestStep == nil {
+		return nil
+	}
+
+	for _, callback := range options.StepCallbacks {
+		if err := callback(latestStep); err != nil {
+			result.State = "callback_error"
+			result.Error = fmt.Errorf("step callback error: %w", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// displayMaxStepsError shows helpful error message when max steps reached
+func (rca *ReactCodeAgent) displayMaxStepsError() {
+	rca.display.Rule("Max Steps Reached")
+	rca.display.Error(utils.NewAgentMaxStepsError("Maximum step limit reached"))
+	rca.display.Info("💡 Tip: The agent was unable to complete the task within the step limit. Consider:")
+	rca.display.Info("   - Simplifying the task")
+	rca.display.Info("   - Increasing max_steps")
+	rca.display.Info("   - Providing more specific instructions")
+}
+
+// displayFinalSummary shows the final execution summary
+func (rca *ReactCodeAgent) displayFinalSummary(result *RunResult) {
+	duration := time.Since(result.Timing.StartTime)
+	if result.State == "success" {
+		rca.display.Success(fmt.Sprintf("Task completed successfully in %d steps (%.2fs)",
+			result.StepCount, duration.Seconds()))
+	} else if result.State != "" {
+		rca.display.Info(fmt.Sprintf("Task ended with state: %s after %d steps (%.2fs)",
+			result.State, result.StepCount, duration.Seconds()))
+	}
+}
+
+func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
+	ctx, result, err := rca.prepareRunContext(options)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { rca.isRunning = false }()
+
+	// Process and add task to memory
+	taskImages := rca.processTaskImages(options.Images)
 	taskStep := memory.NewTaskStep(options.Task, taskImages)
 	rca.memory.AddStep(taskStep)
 
@@ -236,21 +312,12 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 
 	// Execute ReAct loop
 	for rca.stepCount < maxSteps {
-		// Check for interruption
-		if rca.interrupted {
-			result.State = "interrupted"
-			result.Error = utils.NewAgentExecutionError("agent execution was interrupted")
+		if !rca.checkStepConditions(ctx, result) {
+			if result.State == "cancelled" {
+				result.Timing.End()
+				return result, nil
+			}
 			break
-		}
-
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			result.State = "cancelled"
-			result.Error = ctx.Err()
-			result.Timing.End()
-			return result, nil
-		default:
 		}
 
 		rca.stepCount++
@@ -269,24 +336,14 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 		if err != nil {
 			result.State = "error"
 			result.Error = err
-			// Always display errors prominently
 			rca.display.Error(err)
 			break
 		}
 
 		// Execute step callbacks
-		if len(options.StepCallbacks) > 0 {
-			latestStep := rca.memory.GetLastStep()
-			if latestStep != nil {
-				for _, callback := range options.StepCallbacks {
-					if err := callback(latestStep); err != nil {
-						result.State = "callback_error"
-						result.Error = fmt.Errorf("step callback error: %w", err)
-						result.Timing.End()
-						return result, err
-					}
-				}
-			}
+		if err := rca.executeStepCallbacks(options, result); err != nil {
+			result.Timing.End()
+			return result, err
 		}
 
 		// Check for final answer
@@ -303,13 +360,7 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	if rca.stepCount >= maxSteps && result.State == "" {
 		result.State = "max_steps_error"
 		result.Error = utils.NewAgentMaxStepsError(fmt.Sprintf("reached maximum steps: %d", maxSteps))
-		// Display prominent error message
-		rca.display.Rule("Max Steps Reached")
-		rca.display.Error(result.Error)
-		rca.display.Info("💡 Tip: The agent was unable to complete the task within the step limit. Consider:")
-		rca.display.Info("   - Simplifying the task")
-		rca.display.Info("   - Increasing max_steps")
-		rca.display.Info("   - Providing more specific instructions")
+		rca.displayMaxStepsError()
 	}
 
 	// Finalize result
@@ -318,38 +369,16 @@ func (rca *ReactCodeAgent) Run(options *RunOptions) (*RunResult, error) {
 	result.Timing.End()
 
 	// Display final summary
-	if result.State == "success" {
-		duration := time.Since(result.Timing.StartTime)
-		rca.display.Success(fmt.Sprintf("Task completed successfully in %d steps (%.2fs)",
-			result.StepCount, duration.Seconds()))
-	} else if result.State != "" {
-		duration := time.Since(result.Timing.StartTime)
-		rca.display.Info(fmt.Sprintf("Task ended with state: %s after %d steps (%.2fs)",
-			result.State, result.StepCount, duration.Seconds()))
-	}
+	rca.displayFinalSummary(result)
 
 	return result, nil
 }
 
 // executeReactStep executes a single ReAct step with retry logic
-func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int, options *RunOptions) (*stepResult, error) {
-	step := memory.NewActionStep(stepNumber)
-	defer func() {
-		step.Timing.End()
-		rca.memory.AddStep(step)
-	}()
+// Helper functions to reduce cyclomatic complexity
 
-	// Display step header - ALWAYS show this like Python
-	rca.display.Rule(fmt.Sprintf("Step %d", stepNumber))
-	rca.display.Progress("Generating response...")
-
-	// Start monitoring
-	if rca.monitor != nil {
-		rca.monitor.StartStep(stepNumber, "react_code_step")
-		defer rca.monitor.EndStep()
-	}
-
-	// Build prompt
+// preparePrompts builds the system and task prompts
+func (rca *ReactCodeAgent) preparePrompts(options *RunOptions) (string, string, []string, error) {
 	promptBuilder := prompts.NewPromptBuilder(rca.promptTemplate).
 		WithVariable("task", options.Task).
 		WithVariable("tool_descriptions", rca.getToolDescriptions()).
@@ -357,19 +386,62 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 		WithVariable("code_block_opening_tag", rca.codeBlockTags[0]).
 		WithVariable("code_block_closing_tag", rca.codeBlockTags[1])
 
-	// Get system prompt
 	systemPrompt, err := promptBuilder.BuildSystemPrompt()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build system prompt: %w", err)
+		return "", "", nil, fmt.Errorf("failed to build system prompt: %w", err)
 	}
 
-	// Get task prompt
 	taskPrompt, err := promptBuilder.BuildTaskPrompt()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build task prompt: %w", err)
+		return "", "", nil, fmt.Errorf("failed to build task prompt: %w", err)
 	}
 
-	// Prepare messages
+	stopSequences, err := promptBuilder.GetStopSequences()
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to get stop sequences: %w", err)
+	}
+
+	return systemPrompt, taskPrompt, stopSequences, nil
+}
+
+// shouldSkipMessage determines if a message should be skipped
+func (rca *ReactCodeAgent) shouldSkipMessage(msg *memory.Message) bool {
+	if msg.Role == "system" {
+		return true
+	}
+
+	if len(msg.Content) == 0 {
+		return true
+	}
+
+	if textContent, ok := msg.Content[0]["text"].(string); ok {
+		if textContent == "" || strings.HasPrefix(textContent, "Task:") || strings.HasPrefix(textContent, "New task:") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// hasValidContent checks if a message has valid content
+func (rca *ReactCodeAgent) hasValidContent(msgDict map[string]interface{}) bool {
+	if content, ok := msgDict["content"].([]map[string]interface{}); ok && len(content) > 0 {
+		for _, item := range content {
+			if text, ok := item["text"].(string); ok && text != "" {
+				return true
+			}
+		}
+	}
+
+	if toolCalls, ok := msgDict["tool_calls"].([]map[string]interface{}); ok && len(toolCalls) > 0 {
+		return true
+	}
+
+	return false
+}
+
+// prepareMessages builds the message list for the model
+func (rca *ReactCodeAgent) prepareMessages(systemPrompt, taskPrompt string) ([]interface{}, []memory.Message, error) {
 	messages := []interface{}{
 		map[string]interface{}{
 			"role":    "system",
@@ -381,71 +453,36 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 		},
 	}
 
-	// Add conversation history
 	memoryMessages, err := rca.memory.WriteMemoryToMessages(false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to write memory to messages: %w", err)
+		return nil, nil, fmt.Errorf("failed to write memory to messages: %w", err)
 	}
 
 	for _, msg := range memoryMessages {
-		// Skip system and initial task messages
-		skipMessage := msg.Role == "system"
-		if !skipMessage && len(msg.Content) > 0 {
-			// Check if it's a task message
-			if textContent, ok := msg.Content[0]["text"].(string); ok {
-				skipMessage = strings.HasPrefix(textContent, "Task:") || strings.HasPrefix(textContent, "New task:")
-				// Also skip if content is empty
-				if textContent == "" {
-					skipMessage = true
-				}
-			}
-		} else if !skipMessage && len(msg.Content) == 0 {
-			// Skip messages with no content
-			skipMessage = true
+		if rca.shouldSkipMessage(&msg) {
+			continue
 		}
-		if !skipMessage {
-			msgDict := msg.ToDict()
-			// Additional validation to ensure we're not adding empty messages
-			if content, ok := msgDict["content"].([]map[string]interface{}); ok && len(content) > 0 {
-				// Check if at least one content item has text
-				hasText := false
-				for _, item := range content {
-					if text, ok := item["text"].(string); ok && text != "" {
-						hasText = true
-						break
-					}
-				}
-				if hasText {
-					messages = append(messages, msgDict)
-				}
-			} else if toolCalls, ok := msgDict["tool_calls"].([]map[string]interface{}); ok && len(toolCalls) > 0 {
-				// Message has tool calls, include it
-				messages = append(messages, msgDict)
-			}
-			// Otherwise skip the message
+
+		msgDict := msg.ToDict()
+		if rca.hasValidContent(msgDict) {
+			messages = append(messages, msgDict)
 		}
 	}
 
-	step.ModelInputMessages = memoryMessages
+	return messages, memoryMessages, nil
+}
 
-	// Get stop sequences
-	stopSequences, err := promptBuilder.GetStopSequences()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get stop sequences: %w", err)
-	}
-
-	// Build generation options
+// buildGenerationOptions creates model generation options
+func (rca *ReactCodeAgent) buildGenerationOptions(stopSequences []string) *models.GenerateOptions {
 	genOptions := &models.GenerateOptions{
 		MaxTokens:   func() *int { v := 2048; return &v }(),
 		Temperature: func() *float64 { v := 0.3; return &v }(),
 	}
 
-	// Only add stop sequences if the model supports them
 	if models.SupportsStopParameter(rca.model.GetModelID()) {
 		genOptions.StopSequences = stopSequences
 	}
 
-	// Add structured output format if enabled
 	if rca.structuredOutput && rca.promptTemplate.ResponseSchema != nil {
 		genOptions.ResponseFormat = &models.ResponseFormat{
 			Type: "json_object",
@@ -458,12 +495,28 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 		}
 	}
 
-	// Generate response with retry logic
-	var response *models.ChatMessage
+	return genOptions
+}
+
+// validateResponse checks if a response is valid
+func (rca *ReactCodeAgent) validateResponse(response *models.ChatMessage) error {
+	if response == nil {
+		return fmt.Errorf("received nil response from model")
+	}
+	if response.Content == nil || *response.Content == "" {
+		return fmt.Errorf("received empty content from model")
+	}
+	return nil
+}
+
+// executeWithRetries performs model generation with retry logic
+func (rca *ReactCodeAgent) executeWithRetries(messages []interface{}, genOptions *models.GenerateOptions) (*models.ChatMessage, error) {
 	maxRetries := 3
+	var response *models.ChatMessage
+	var err error
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff: 2s, 4s, 8s
 			waitTime := time.Duration(2<<(attempt-1)) * time.Second
 			if rca.verbose {
 				rca.display.Info(fmt.Sprintf("Retrying after %v (attempt %d/%d)...", waitTime, attempt+1, maxRetries))
@@ -471,56 +524,104 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 			time.Sleep(waitTime)
 		}
 
-		// Add debug logging for retries
 		if rca.verbose && attempt > 0 {
 			rca.display.Info(fmt.Sprintf("Calling model.Generate() - attempt %d/%d", attempt+1, maxRetries))
 		}
 
 		response, err = rca.model.Generate(messages, genOptions)
 		if err == nil {
-			// Validate response
-			if response == nil {
-				err = fmt.Errorf("received nil response from model")
+			if validErr := rca.validateResponse(response); validErr != nil {
+				err = validErr
 				if rca.verbose {
 					rca.display.Error(err)
 				}
 				continue
 			}
-			if response.Content == nil || *response.Content == "" {
-				err = fmt.Errorf("received empty content from model")
-				if rca.verbose {
-					rca.display.Error(err)
-				}
-				continue
-			}
-			// Success - valid response
 			break
 		}
 
-		// Log the error with details
 		if rca.verbose {
 			rca.display.Error(fmt.Errorf("Model generation attempt %d failed: %v", attempt+1, err))
 		}
 	}
 
 	if err != nil {
-		step.Error = utils.NewAgentGenerationError(fmt.Sprintf("model generation failed after %d attempts: %v", maxRetries, err))
+		return nil, fmt.Errorf("model generation failed after %d attempts: %v", maxRetries, err)
+	}
+
+	return response, nil
+}
+
+// cleanModelOutput removes system-generated content
+func (rca *ReactCodeAgent) cleanModelOutput(output string) string {
+	if idx := strings.Index(output, "Observation:"); idx >= 0 {
+		if rca.verbose {
+			rca.display.Info("Cleaned model output by removing generated 'Observation:' content")
+		}
+		return strings.TrimSpace(output[:idx])
+	}
+	return output
+}
+
+// updateMetrics updates monitoring and display metrics
+func (rca *ReactCodeAgent) updateMetrics(step *memory.ActionStep, response *models.ChatMessage) {
+	if rca.monitor != nil {
+		rca.monitor.AddTokenUsage(response.TokenUsage)
+	}
+
+	if rca.verbose && response.TokenUsage != nil {
+		duration := time.Since(step.Timing.StartTime)
+		rca.display.Metrics(step.StepNumber, duration, response.TokenUsage.InputTokens, response.TokenUsage.OutputTokens)
+	}
+}
+
+func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int, options *RunOptions) (*stepResult, error) {
+	step := memory.NewActionStep(stepNumber)
+	defer func() {
+		step.Timing.End()
+		rca.memory.AddStep(step)
+	}()
+
+	// Display step header
+	rca.display.Rule(fmt.Sprintf("Step %d", stepNumber))
+	rca.display.Progress("Generating response...")
+
+	// Start monitoring
+	if rca.monitor != nil {
+		rca.monitor.StartStep(stepNumber, "react_code_step")
+		defer rca.monitor.EndStep()
+	}
+
+	// Prepare prompts
+	systemPrompt, taskPrompt, stopSequences, err := rca.preparePrompts(options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare messages
+	messages, memoryMessages, err := rca.prepareMessages(systemPrompt, taskPrompt)
+	if err != nil {
+		return nil, err
+	}
+	step.ModelInputMessages = memoryMessages
+
+	// Build generation options
+	genOptions := rca.buildGenerationOptions(stopSequences)
+
+	// Execute with retries
+	response, err := rca.executeWithRetries(messages, genOptions)
+	if err != nil {
+		step.Error = utils.NewAgentGenerationError(err.Error())
 		return nil, step.Error
 	}
 
+	// Process response
 	if response.Content != nil {
 		step.ModelOutput = *response.Content
-
-		// Clean response for models that don't respect stop sequences (e.g., Kimi)
-		// Remove any content after "Observation:" which should be system-generated
-		if idx := strings.Index(step.ModelOutput, "Observation:"); idx >= 0 {
-			step.ModelOutput = strings.TrimSpace(step.ModelOutput[:idx])
-			if rca.verbose {
-				rca.display.Info("Cleaned model output by removing generated 'Observation:' content")
-			}
-			// Update the response content to the cleaned version
-			cleanedContent := step.ModelOutput
-			response.Content = &cleanedContent
+		cleanedOutput := rca.cleanModelOutput(step.ModelOutput)
+		if cleanedOutput != step.ModelOutput {
+			step.ModelOutput = cleanedOutput
+			response.Content = &cleanedOutput
 		}
 	}
 
@@ -530,55 +631,86 @@ func (rca *ReactCodeAgent) executeReactStep(ctx context.Context, stepNumber int,
 	}
 	step.TokenUsage = response.TokenUsage
 
-	// Add token usage to monitoring
-	if rca.monitor != nil {
-		rca.monitor.AddTokenUsage(response.TokenUsage)
-	}
-
-	// Display metrics if verbose
-	if rca.verbose && response.TokenUsage != nil {
-		duration := time.Since(step.Timing.StartTime)
-		rca.display.Metrics(step.StepNumber, duration, response.TokenUsage.InputTokens, response.TokenUsage.OutputTokens)
-	}
+	// Update metrics
+	rca.updateMetrics(step, response)
 
 	// Parse and execute the response
 	return rca.processReactResponse(ctx, step, response)
 }
 
-// processReactResponse processes the model response following ReAct pattern
-func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memory.ActionStep, response *models.ChatMessage) (*stepResult, error) {
-	// Enhanced validation with detailed logging
+// Helper function to create error results
+func (rca *ReactCodeAgent) createErrorResult(step *memory.ActionStep, errMsg string, tokenUsage *monitoring.TokenUsage) *stepResult {
+	if rca.verbose {
+		rca.display.Error(fmt.Errorf(errMsg))
+	}
+	step.Error = utils.NewAgentError(errMsg)
+	step.Observations = "Error: " + errMsg
+	return &stepResult{isFinalAnswer: false, tokenUsage: tokenUsage}
+}
+
+// validateAndExtractContent validates response and extracts content
+func (rca *ReactCodeAgent) validateAndExtractContent(response *models.ChatMessage, step *memory.ActionStep) (string, *stepResult) {
 	if response == nil {
-		errMsg := "received nil response from processReactResponse"
-		if rca.verbose {
-			rca.display.Error(fmt.Errorf(errMsg))
-		}
-		step.Error = utils.NewAgentError(errMsg)
-		step.Observations = "Error: " + errMsg
-		return &stepResult{isFinalAnswer: false}, nil
+		return "", rca.createErrorResult(step, "received nil response from processReactResponse", nil)
 	}
 
 	if response.Content == nil {
-		errMsg := "received nil content in response"
-		if rca.verbose {
-			rca.display.Error(fmt.Errorf(errMsg))
-		}
-		step.Error = utils.NewAgentError(errMsg)
-		step.Observations = "Error: " + errMsg
-		return &stepResult{isFinalAnswer: false, tokenUsage: response.TokenUsage}, nil
+		return "", rca.createErrorResult(step, "received nil content in response", response.TokenUsage)
 	}
 
 	content := *response.Content
-
-	// Additional validation
 	if content == "" {
-		errMsg := "received empty content string"
+		return "", rca.createErrorResult(step, "received empty content string", response.TokenUsage)
+	}
+
+	return content, nil
+}
+
+// handleRawParseResult processes raw parse results
+func (rca *ReactCodeAgent) handleRawParseResult(ctx context.Context, step *memory.ActionStep, parseResult *parser.ParseResult, content string, tokenUsage *monitoring.TokenUsage) (*stepResult, error) {
+	// Check if there's code or final_answer hidden in the content
+	if strings.Contains(content, "final_answer(") || strings.Contains(content, "final_answer (") {
 		if rca.verbose {
-			rca.display.Error(fmt.Errorf(errMsg))
+			rca.display.Info("Detected final_answer in raw content, attempting extraction")
 		}
-		step.Error = utils.NewAgentError(errMsg)
-		step.Observations = "Error: " + errMsg
-		return &stepResult{isFinalAnswer: false, tokenUsage: response.TokenUsage}, nil
+		codeResult := &parser.ParseResult{
+			Type:    "code",
+			Content: extractCodeFromRaw(content),
+			Thought: parseResult.Thought,
+		}
+		return rca.handleCodeExecution(ctx, step, codeResult)
+	}
+
+	// Check for code blocks that might have been missed
+	if strings.Contains(content, rca.codeBlockTags[0]) {
+		if rca.verbose {
+			rca.display.Info("Found code tags in raw content, re-attempting parse")
+		}
+		if code := extractCodeBetweenTags(content, rca.codeBlockTags[0], rca.codeBlockTags[1]); code != "" {
+			codeResult := &parser.ParseResult{
+				Type:    "code",
+				Content: code,
+				Thought: parseResult.Thought,
+			}
+			return rca.handleCodeExecution(ctx, step, codeResult)
+		}
+	}
+
+	// Otherwise treat as observation/thinking
+	if rca.verbose {
+		rca.display.Info("Processing as raw thought/observation")
+	}
+	step.Observations = content
+	rca.display.ModelOutput(content)
+	return &stepResult{isFinalAnswer: false, tokenUsage: tokenUsage}, nil
+}
+
+// processReactResponse processes the model response following ReAct pattern
+func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memory.ActionStep, response *models.ChatMessage) (*stepResult, error) {
+	// Validate and extract content
+	content, errorResult := rca.validateAndExtractContent(response, step)
+	if errorResult != nil {
+		return errorResult, nil
 	}
 
 	// Log the raw content if verbose
@@ -588,14 +720,10 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 
 	// Parse the response with error recovery
 	parseResult := rca.responseParser.Parse(content)
-
-	// If parsing completely failed, try to extract meaningful content
 	if parseResult == nil {
-		errMsg := "parser returned nil result"
 		if rca.verbose {
-			rca.display.Error(fmt.Errorf(errMsg))
+			rca.display.Error(fmt.Errorf("parser returned nil result"))
 		}
-		// Create a raw parse result as fallback
 		parseResult = &parser.ParseResult{
 			Type:    "raw",
 			Content: content,
@@ -603,7 +731,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 		}
 	}
 
-	// Always display the raw model output first (like Python's streaming display)
+	// Always display the raw model output first
 	if rca.verbose && content != "" {
 		rca.display.ModelOutput(content)
 	}
@@ -635,44 +763,7 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 		rca.display.Error(step.Error)
 		return &stepResult{isFinalAnswer: false, tokenUsage: response.TokenUsage}, nil
 	case "raw":
-		// For raw responses, check if there's code or final_answer hidden in the content
-		if strings.Contains(content, "final_answer(") || strings.Contains(content, "final_answer (") {
-			// Try to extract final answer from raw content
-			if rca.verbose {
-				rca.display.Info("Detected final_answer in raw content, attempting extraction")
-			}
-			// Create a code parse result to execute the final_answer call
-			codeResult := &parser.ParseResult{
-				Type:    "code",
-				Content: extractCodeFromRaw(content),
-				Thought: parseResult.Thought,
-			}
-			return rca.handleCodeExecution(ctx, step, codeResult)
-		}
-
-		// Check for code blocks that might have been missed
-		if strings.Contains(content, rca.codeBlockTags[0]) {
-			if rca.verbose {
-				rca.display.Info("Found code tags in raw content, re-attempting parse")
-			}
-			// Force re-parse focusing on code extraction
-			if code := extractCodeBetweenTags(content, rca.codeBlockTags[0], rca.codeBlockTags[1]); code != "" {
-				codeResult := &parser.ParseResult{
-					Type:    "code",
-					Content: code,
-					Thought: parseResult.Thought,
-				}
-				return rca.handleCodeExecution(ctx, step, codeResult)
-			}
-		}
-
-		// Otherwise treat as observation/thinking
-		if rca.verbose {
-			rca.display.Info("Processing as raw thought/observation")
-		}
-		step.Observations = content
-		rca.display.ModelOutput(content)
-		return &stepResult{isFinalAnswer: false, tokenUsage: response.TokenUsage}, nil
+		return rca.handleRawParseResult(ctx, step, parseResult, content, response.TokenUsage)
 	default:
 		// Unknown parse result type
 		if rca.verbose {
@@ -684,71 +775,47 @@ func (rca *ReactCodeAgent) processReactResponse(ctx context.Context, step *memor
 	}
 }
 
-// handleCodeExecution executes parsed code
-func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory.ActionStep, parseResult *parser.ParseResult) (*stepResult, error) {
-	code := parseResult.Content
-
-	// Store code for memory display purposes
-	// We'll handle this in the memory display logic instead of adding fields
-
-	// Validate code length
+// validateCodeLength checks if code exceeds maximum length
+func (rca *ReactCodeAgent) validateCodeLength(code string, step *memory.ActionStep) *stepResult {
 	if len(code) > rca.maxCodeLength {
 		errMsg := fmt.Sprintf("Code block too long: %d characters (max: %d)", len(code), rca.maxCodeLength)
 		step.Observations = errMsg
 		rca.display.Error(fmt.Errorf(errMsg))
-		return &stepResult{isFinalAnswer: false}, nil
+		return &stepResult{isFinalAnswer: false}
 	}
+	return nil
+}
 
-	// Display the code block with proper title (like Python)
-	rca.display.Rule("Code")
-	rca.display.Code("Executing parsed code:", code)
-
-	// Log code execution
+// logCodeExecution logs code execution to monitor
+func (rca *ReactCodeAgent) logCodeExecution(code string) {
 	if rca.monitor != nil {
 		rca.monitor.LogToolCall("go_executor", map[string]interface{}{
 			"code": code,
 		})
 	}
+}
 
-	// Execute the code
-	startTime := time.Now()
-	execResult, err := rca.goExecutor.ExecuteWithResult(code)
-	executionDuration := time.Since(startTime)
-
-	// Display execution duration
-	if rca.verbose {
-		rca.display.Info(fmt.Sprintf("Execution time: %.3fs", executionDuration.Seconds()))
+// handleExecutionError processes code execution errors
+func (rca *ReactCodeAgent) handleExecutionError(err error, execResult *executors.ExecutionResult, step *memory.ActionStep) *stepResult {
+	errMsg := fmt.Sprintf("Code execution error: %s", err.Error())
+	step.Observations = errMsg
+	
+	if execResult != nil && execResult.Stderr != "" {
+		step.Observations += fmt.Sprintf("\nStderr: %s", execResult.Stderr)
+		rca.display.Error(fmt.Errorf("Stderr: %s", execResult.Stderr))
 	}
-
-	if err != nil {
-		errMsg := fmt.Sprintf("Code execution error: %s", err.Error())
-		step.Observations = errMsg
-		if execResult != nil && execResult.Stderr != "" {
-			step.Observations += fmt.Sprintf("\nStderr: %s", execResult.Stderr)
-			rca.display.Error(fmt.Errorf("Stderr: %s", execResult.Stderr))
-		}
-		rca.display.Error(err)
-		if rca.monitor != nil {
-			rca.monitor.LogToolResult("go_executor", nil, err)
-		}
-		return &stepResult{isFinalAnswer: false}, nil
+	
+	rca.display.Error(err)
+	if rca.monitor != nil {
+		rca.monitor.LogToolResult("go_executor", nil, err)
 	}
+	
+	return &stepResult{isFinalAnswer: false}
+}
 
-	// Check if it's a final answer
-	if execResult.IsFinalAnswer {
-		step.ActionOutput = execResult.FinalAnswer
-		step.Observations = "Final answer provided"
-		rca.display.FinalAnswer(execResult.FinalAnswer)
-		return &stepResult{
-			isFinalAnswer: true,
-			output:        execResult.FinalAnswer,
-		}, nil
-	}
-
-	// Format observation like Python: include both logs AND output
+// formatObservation creates observation string from execution result
+func (rca *ReactCodeAgent) formatObservation(execResult *executors.ExecutionResult) string {
 	var observationParts []string
-
-	// Always include execution status
 	observationParts = append(observationParts, "=== Code Execution ===")
 
 	// Add execution logs if present
@@ -762,7 +829,6 @@ func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory
 		outputStr := fmt.Sprintf("%v", execResult.Output)
 		if outputStr != "" && outputStr != "<nil>" {
 			observationParts = append(observationParts, "\nLast output from code snippet:")
-			// Truncate if too long (like Python)
 			if len(outputStr) > 500 {
 				outputStr = outputStr[:500] + "...[truncated]"
 			}
@@ -775,8 +841,54 @@ func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory
 		observationParts = append(observationParts, "Code executed successfully with no output")
 	}
 
+	return strings.Join(observationParts, "\n")
+}
+
+// handleCodeExecution executes parsed code
+func (rca *ReactCodeAgent) handleCodeExecution(ctx context.Context, step *memory.ActionStep, parseResult *parser.ParseResult) (*stepResult, error) {
+	code := parseResult.Content
+
+	// Validate code length
+	if result := rca.validateCodeLength(code, step); result != nil {
+		return result, nil
+	}
+
+	// Display the code block
+	rca.display.Rule("Code")
+	rca.display.Code("Executing parsed code:", code)
+
+	// Log code execution
+	rca.logCodeExecution(code)
+
+	// Execute the code
+	startTime := time.Now()
+	execResult, err := rca.goExecutor.ExecuteWithResult(code)
+	executionDuration := time.Since(startTime)
+
+	// Display execution duration
+	if rca.verbose {
+		rca.display.Info(fmt.Sprintf("Execution time: %.3fs", executionDuration.Seconds()))
+	}
+
+	// Handle execution error
+	if err != nil {
+		return rca.handleExecutionError(err, execResult, step), nil
+	}
+
+	// Check if it's a final answer
+	if execResult.IsFinalAnswer {
+		step.ActionOutput = execResult.FinalAnswer
+		step.Observations = "Final answer provided"
+		rca.display.FinalAnswer(execResult.FinalAnswer)
+		return &stepResult{
+			isFinalAnswer: true,
+			output:        execResult.FinalAnswer,
+		}, nil
+	}
+
+	// Format observation
 	step.ActionOutput = execResult.Output
-	step.Observations = strings.Join(observationParts, "\n")
+	step.Observations = rca.formatObservation(execResult)
 
 	// Display the full observation
 	rca.display.Observation(step.Observations)

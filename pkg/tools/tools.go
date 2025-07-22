@@ -243,6 +243,62 @@ func (bt *BaseTool) Forward(args ...interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("Forward method not implemented")
 }
 
+// convertArgsToMap converts various argument formats to a map
+func (bt *BaseTool) convertArgsToMap(args []interface{}) map[string]interface{} {
+	argsMap := make(map[string]interface{})
+	
+	if len(args) == 0 {
+		return argsMap
+	}
+	
+	if len(args) == 1 {
+		// Check if it's already a map
+		if argMap, ok := args[0].(map[string]interface{}); ok {
+			return argMap
+		}
+		// Single argument - map to first input parameter
+		inputNames := bt.getInputNames()
+		if len(inputNames) > 0 {
+			argsMap[inputNames[0]] = args[0]
+		}
+		return argsMap
+	}
+	
+	// Multiple arguments - map to input parameters in order
+	inputNames := bt.getInputNames()
+	for i, arg := range args {
+		if i < len(inputNames) {
+			argsMap[inputNames[i]] = arg
+		}
+	}
+	
+	return argsMap
+}
+
+// callForwardMethod calls the Forward method with appropriate arguments
+func (bt *BaseTool) callForwardMethod(convertedMap map[string]interface{}) (interface{}, error) {
+	if len(convertedMap) == 0 {
+		return bt.Forward()
+	}
+	
+	if len(convertedMap) == 1 {
+		// Single argument - extract the value
+		for _, v := range convertedMap {
+			return bt.Forward(v)
+		}
+	}
+	
+	// Multiple arguments - convert to slice in correct order
+	argSlice := make([]interface{}, 0, len(convertedMap))
+	inputNames := bt.getInputNames()
+	for _, name := range inputNames {
+		if val, exists := convertedMap[name]; exists {
+			argSlice = append(argSlice, val)
+		}
+	}
+	return bt.Forward(argSlice...)
+}
+
 // Call implements Tool
 func (bt *BaseTool) Call(args ...interface{}) (interface{}, error) {
 	// Ensure tool is set up
@@ -252,62 +308,19 @@ func (bt *BaseTool) Call(args ...interface{}) (interface{}, error) {
 		}
 	}
 
-	// Convert args to map format expected by validation
-	argsMap := make(map[string]interface{})
-
-	// If args provided as a single map, use it directly
-	if len(args) == 1 {
-		if argMap, ok := args[0].(map[string]interface{}); ok {
-			argsMap = argMap
-		} else {
-			// Single argument - need to map to first input parameter
-			inputNames := bt.getInputNames()
-			if len(inputNames) > 0 {
-				argsMap[inputNames[0]] = args[0]
-			}
-		}
-	} else if len(args) > 1 {
-		// Multiple arguments - map to input parameters in order
-		inputNames := bt.getInputNames()
-		for i, arg := range args {
-			if i < len(inputNames) {
-				argsMap[inputNames[i]] = arg
-			}
-		}
-	}
+	// Convert args to map format
+	argsMap := bt.convertArgsToMap(args)
 
 	// Handle agent input types
 	_, convertedMap := agent_types.HandleAgentInputTypes(nil, argsMap)
 
+	// Validate inputs
 	if err := bt.validateInputs(convertedMap); err != nil {
 		return nil, fmt.Errorf("input validation failed: %w", err)
 	}
 
 	// Call the forward method
-	var result interface{}
-	var err error
-
-	// Use convertedMap for actual argument handling
-	if len(convertedMap) == 0 {
-		result, err = bt.Forward()
-	} else if len(convertedMap) == 1 {
-		// Single argument
-		for _, v := range convertedMap {
-			result, err = bt.Forward(v)
-			break
-		}
-	} else {
-		// Multiple arguments - convert to slice
-		argSlice := make([]interface{}, 0, len(convertedMap))
-		inputNames := bt.getInputNames()
-		for _, name := range inputNames {
-			if val, exists := convertedMap[name]; exists {
-				argSlice = append(argSlice, val)
-			}
-		}
-		result, err = bt.Forward(argSlice...)
-	}
-
+	result, err := bt.callForwardMethod(convertedMap)
 	if err != nil {
 		return nil, err
 	}
@@ -427,77 +440,107 @@ func (bt *BaseTool) validateInputs(args map[string]interface{}) error {
 	return nil
 }
 
-// validateValueType validates a value against a type constraint
-func validateValueType(name string, value interface{}, expectedType string) error {
-	switch expectedType {
-	case "string":
-		if _, ok := value.(string); !ok {
-			return fmt.Errorf("parameter '%s' must be a string, got %T", name, value)
+// validateInteger checks if a value is a valid integer
+func validateInteger(name string, value interface{}) error {
+	switch value.(type) {
+	case int, int32, int64:
+		return nil
+	case float64:
+		// JSON unmarshaling gives us float64 for numbers, check if it's actually an integer
+		if v := value.(float64); v != float64(int64(v)) {
+			return fmt.Errorf("parameter '%s' must be an integer, got float %v", name, v)
 		}
+		return nil
+	default:
+		return fmt.Errorf("parameter '%s' must be an integer, got %T", name, value)
+	}
+}
 
-	case "boolean":
-		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("parameter '%s' must be a boolean, got %T", name, value)
-		}
+// validateNumber checks if a value is a valid number
+func validateNumber(name string, value interface{}) error {
+	switch value.(type) {
+	case int, int32, int64, float32, float64:
+		return nil
+	default:
+		return fmt.Errorf("parameter '%s' must be a number, got %T", name, value)
+	}
+}
 
-	case "integer":
-		switch value.(type) {
-		case int, int32, int64:
-			// Valid integer types
-		case float64:
-			// JSON unmarshaling gives us float64 for numbers, check if it's actually an integer
-			if v := value.(float64); v != float64(int64(v)) {
-				return fmt.Errorf("parameter '%s' must be an integer, got float %v", name, v)
-			}
-		default:
-			return fmt.Errorf("parameter '%s' must be an integer, got %T", name, value)
-		}
+// validateArray checks if a value is a valid array
+func validateArray(name string, value interface{}) error {
+	rv := reflect.ValueOf(value)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return fmt.Errorf("parameter '%s' must be an array, got %T", name, value)
+	}
+	return nil
+}
 
-	case "number":
-		switch value.(type) {
-		case int, int32, int64, float32, float64:
-			// Valid number types
-		default:
-			return fmt.Errorf("parameter '%s' must be a number, got %T", name, value)
-		}
-
-	case "array":
-		rv := reflect.ValueOf(value)
-		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return fmt.Errorf("parameter '%s' must be an array, got %T", name, value)
-		}
-
-	case "object":
-		if _, ok := value.(map[string]interface{}); !ok {
-			return fmt.Errorf("parameter '%s' must be an object, got %T", name, value)
-		}
-
+// validateMediaType checks if a value is a valid media type (image/audio)
+func validateMediaType(name string, value interface{}, mediaType string) error {
+	switch mediaType {
 	case "image":
-		// Check if it's an AgentImage or compatible type
 		switch value.(type) {
 		case *agent_types.AgentImage, string, []byte:
-			// Valid image types
+			return nil
 		default:
 			return fmt.Errorf("parameter '%s' must be an image, got %T", name, value)
 		}
-
 	case "audio":
-		// Check if it's an AgentAudio or compatible type
 		switch value.(type) {
 		case *agent_types.AgentAudio, string, []byte:
-			// Valid audio types
+			return nil
 		default:
 			return fmt.Errorf("parameter '%s' must be audio, got %T", name, value)
 		}
+	}
+	return fmt.Errorf("unknown media type '%s'", mediaType)
+}
 
-	case "any", "null":
-		// Any type is allowed
+// Type validator functions map
+var typeValidators = map[string]func(string, interface{}) error{
+	"string": func(name string, value interface{}) error {
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("parameter '%s' must be a string, got %T", name, value)
+		}
+		return nil
+	},
+	"boolean": func(name string, value interface{}) error {
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("parameter '%s' must be a boolean, got %T", name, value)
+		}
+		return nil
+	},
+	"integer": validateInteger,
+	"number":  validateNumber,
+	"array":   validateArray,
+	"object": func(name string, value interface{}) error {
+		if _, ok := value.(map[string]interface{}); !ok {
+			return fmt.Errorf("parameter '%s' must be an object, got %T", name, value)
+		}
+		return nil
+	},
+	"any": func(name string, value interface{}) error {
+		return nil // Any type is allowed
+	},
+	"null": func(name string, value interface{}) error {
+		return nil // Any type is allowed
+	},
+}
 
-	default:
+// validateValueType validates a value against a type constraint
+func validateValueType(name string, value interface{}, expectedType string) error {
+	// Check if it's a media type
+	if expectedType == "image" || expectedType == "audio" {
+		return validateMediaType(name, value, expectedType)
+	}
+	
+	// Check if we have a validator for this type
+	validator, ok := typeValidators[expectedType]
+	if !ok {
 		return fmt.Errorf("unknown type constraint '%s' for parameter '%s'", expectedType, name)
 	}
-
-	return nil
+	
+	return validator(name, value)
 }
 
 // isValidType checks if a type is in the authorized types list
@@ -542,6 +585,104 @@ func NewFunctionTool(
 	return ft, nil
 }
 
+// handleSingleArgument processes a single argument for function call
+func (ft *FunctionTool) handleSingleArgument(arg interface{}, funcType reflect.Type, numIn int) []reflect.Value {
+	var callArgs []reflect.Value
+	
+	if argMap, ok := arg.(map[string]interface{}); ok {
+		// Map arguments to function parameters
+		inputNames := ft.getInputNames()
+		for i := 0; i < numIn && i < len(inputNames); i++ {
+			if val, exists := argMap[inputNames[i]]; exists {
+				callArgs = append(callArgs, reflect.ValueOf(val))
+			} else {
+				// Use zero value for missing arguments
+				callArgs = append(callArgs, reflect.Zero(funcType.In(i)))
+			}
+		}
+	} else {
+		// Single direct argument
+		callArgs = append(callArgs, reflect.ValueOf(arg))
+	}
+	
+	return callArgs
+}
+
+// handleMultipleArguments processes multiple arguments for function call
+func (ft *FunctionTool) handleMultipleArguments(args []interface{}, funcType reflect.Type, numIn int) []reflect.Value {
+	var callArgs []reflect.Value
+	
+	for i, arg := range args {
+		if i < numIn {
+			callArgs = append(callArgs, reflect.ValueOf(arg))
+		}
+	}
+	
+	return callArgs
+}
+
+// prepareCallArguments prepares arguments for function call
+func (ft *FunctionTool) prepareCallArguments(args []interface{}, funcType reflect.Type) []reflect.Value {
+	numIn := funcType.NumIn()
+	if numIn == 0 {
+		return []reflect.Value{}
+	}
+	
+	var callArgs []reflect.Value
+	
+	if len(args) == 1 {
+		callArgs = ft.handleSingleArgument(args[0], funcType, numIn)
+	} else {
+		callArgs = ft.handleMultipleArguments(args, funcType, numIn)
+	}
+	
+	// Pad with zero values if not enough arguments
+	for len(callArgs) < numIn {
+		callArgs = append(callArgs, reflect.Zero(funcType.In(len(callArgs))))
+	}
+	
+	return callArgs
+}
+
+// processReturnValues processes function return values
+func (ft *FunctionTool) processReturnValues(results []reflect.Value) (interface{}, error) {
+	if len(results) == 0 {
+		return nil, nil
+	}
+	
+	if len(results) == 1 {
+		return results[0].Interface(), nil
+	}
+	
+	// Check if last result is an error
+	lastResult := results[len(results)-1]
+	if lastResult.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		// Last return value is an error
+		if !lastResult.IsNil() {
+			return nil, lastResult.Interface().(error)
+		}
+		
+		// Return other values
+		if len(results) == 2 {
+			return results[0].Interface(), nil
+		}
+		
+		// Multiple non-error return values
+		retVals := make([]interface{}, len(results)-1)
+		for i := 0; i < len(results)-1; i++ {
+			retVals[i] = results[i].Interface()
+		}
+		return retVals, nil
+	}
+	
+	// Multiple return values, none are errors
+	retVals := make([]interface{}, len(results))
+	for i, result := range results {
+		retVals[i] = result.Interface()
+	}
+	return retVals, nil
+}
+
 // callFunction calls the underlying Go function with proper argument handling
 func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 	if ft.function == nil {
@@ -555,82 +696,14 @@ func (ft *FunctionTool) callFunction(args ...interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("provided function is not a function")
 	}
 
-	// Prepare arguments for function call
-	var callArgs []reflect.Value
-
-	numIn := funcType.NumIn()
-	if numIn > 0 {
-		if len(args) == 1 {
-			// Single argument case
-			if argMap, ok := args[0].(map[string]interface{}); ok {
-				// Map arguments to function parameters
-				inputNames := ft.getInputNames()
-				for i := 0; i < numIn && i < len(inputNames); i++ {
-					if val, exists := argMap[inputNames[i]]; exists {
-						callArgs = append(callArgs, reflect.ValueOf(val))
-					} else {
-						// Use zero value for missing arguments
-						callArgs = append(callArgs, reflect.Zero(funcType.In(i)))
-					}
-				}
-			} else {
-				// Single direct argument
-				callArgs = append(callArgs, reflect.ValueOf(args[0]))
-			}
-		} else {
-			// Multiple arguments
-			for i, arg := range args {
-				if i < numIn {
-					callArgs = append(callArgs, reflect.ValueOf(arg))
-				}
-			}
-		}
-
-		// Pad with zero values if not enough arguments
-		for len(callArgs) < numIn {
-			callArgs = append(callArgs, reflect.Zero(funcType.In(len(callArgs))))
-		}
-	}
+	// Prepare arguments
+	callArgs := ft.prepareCallArguments(args, funcType)
 
 	// Call the function
 	results := funcValue.Call(callArgs)
 
-	// Handle return values
-	if len(results) == 0 {
-		return nil, nil
-	}
-
-	if len(results) == 1 {
-		return results[0].Interface(), nil
-	}
-
-	// Multiple return values - check if last one is an error
-	lastResult := results[len(results)-1]
-	if lastResult.Type().Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		// Last return value is an error
-		if !lastResult.IsNil() {
-			return nil, lastResult.Interface().(error)
-		}
-
-		// Return other values
-		if len(results) == 2 {
-			return results[0].Interface(), nil
-		} else {
-			// Multiple non-error return values
-			retVals := make([]interface{}, len(results)-1)
-			for i := 0; i < len(results)-1; i++ {
-				retVals[i] = results[i].Interface()
-			}
-			return retVals, nil
-		}
-	}
-
-	// Multiple return values, none are errors
-	retVals := make([]interface{}, len(results))
-	for i, result := range results {
-		retVals[i] = result.Interface()
-	}
-	return retVals, nil
+	// Process return values
+	return ft.processReturnValues(results)
 }
 
 // ToDict implements Tool for FunctionTool

@@ -135,6 +135,53 @@ func (sv *SchemaValidator) validateAgainstSchema(data interface{}, schema map[st
 }
 
 // validateObject validates an object against object schema
+// extractRequiredProperties extracts required property names from schema
+func extractRequiredProperties(schema map[string]interface{}) []string {
+	var required []string
+	
+	if reqInterface, exists := schema["required"]; exists {
+		switch req := reqInterface.(type) {
+		case []interface{}:
+			for _, r := range req {
+				if str, ok := r.(string); ok {
+					required = append(required, str)
+				}
+			}
+		case []string:
+			required = req
+		}
+	}
+	
+	return required
+}
+
+// validateRequiredProperties checks if all required properties exist
+func validateRequiredProperties(dataMap map[string]interface{}, required []string) []string {
+	var errors []string
+	for _, reqStr := range required {
+		if _, exists := dataMap[reqStr]; !exists {
+			errors = append(errors, fmt.Sprintf("required property '%s' missing", reqStr))
+		}
+	}
+	return errors
+}
+
+// validateProperty validates a single property against its schema
+func (sv *SchemaValidator) validateProperty(key string, value interface{}, propSchema interface{}) []string {
+	var errors []string
+	
+	if propSchemaMap, ok := propSchema.(map[string]interface{}); ok {
+		isValid, propErrors := sv.validateAgainstSchema(value, propSchemaMap)
+		if !isValid {
+			for _, err := range propErrors {
+				errors = append(errors, fmt.Sprintf("property '%s': %s", key, err))
+			}
+		}
+	}
+	
+	return errors
+}
+
 func (sv *SchemaValidator) validateObject(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
 
@@ -144,34 +191,14 @@ func (sv *SchemaValidator) validateObject(data interface{}, schema map[string]in
 	}
 
 	// Check required properties
-	if required, ok := schema["required"].([]interface{}); ok {
-		for _, req := range required {
-			if reqStr, ok := req.(string); ok {
-				if _, exists := dataMap[reqStr]; !exists {
-					errors = append(errors, fmt.Sprintf("required property '%s' missing", reqStr))
-				}
-			}
-		}
-	} else if requiredSlice, ok := schema["required"].([]string); ok {
-		for _, reqStr := range requiredSlice {
-			if _, exists := dataMap[reqStr]; !exists {
-				errors = append(errors, fmt.Sprintf("required property '%s' missing", reqStr))
-			}
-		}
-	}
+	required := extractRequiredProperties(schema)
+	errors = append(errors, validateRequiredProperties(dataMap, required)...)
 
 	// Validate properties
 	if properties, ok := schema["properties"].(map[string]interface{}); ok {
 		for key, value := range dataMap {
 			if propSchema, exists := properties[key]; exists {
-				if propSchemaMap, ok := propSchema.(map[string]interface{}); ok {
-					isValid, propErrors := sv.validateAgainstSchema(value, propSchemaMap)
-					if !isValid {
-						for _, err := range propErrors {
-							errors = append(errors, fmt.Sprintf("property '%s': %s", key, err))
-						}
-					}
-				}
+				errors = append(errors, sv.validateProperty(key, value, propSchema)...)
 			} else {
 				// Check if additional properties are allowed
 				if additionalProps, ok := schema["additionalProperties"]; ok {
@@ -186,6 +213,37 @@ func (sv *SchemaValidator) validateObject(data interface{}, schema map[string]in
 	return errors
 }
 
+// checkArrayLengthConstraint checks array length against min/max constraints
+func checkArrayLengthConstraint(length int, constraint interface{}, isMin bool) error {
+	if val, ok := toFloat64(constraint); ok {
+		intVal := int(val)
+		if isMin && length < intVal {
+			return fmt.Errorf("array length %d is less than minItems %d", length, intVal)
+		} else if !isMin && length > intVal {
+			return fmt.Errorf("array length %d exceeds maxItems %d", length, intVal)
+		}
+	}
+	return nil
+}
+
+// validateArrayItems validates each item in the array
+func (sv *SchemaValidator) validateArrayItems(dataArray reflect.Value, itemSchema map[string]interface{}) []string {
+	var errors []string
+	length := dataArray.Len()
+	
+	for i := 0; i < length; i++ {
+		item := dataArray.Index(i).Interface()
+		isValid, itemErrors := sv.validateAgainstSchema(item, itemSchema)
+		if !isValid {
+			for _, err := range itemErrors {
+				errors = append(errors, fmt.Sprintf("item[%d]: %s", i, err))
+			}
+		}
+	}
+	
+	return errors
+}
+
 // validateArray validates an array against array schema
 func (sv *SchemaValidator) validateArray(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
@@ -195,38 +253,24 @@ func (sv *SchemaValidator) validateArray(data interface{}, schema map[string]int
 		return []string{"data is not an array"}
 	}
 
-	// Check array length constraints
 	length := dataArray.Len()
-	if minItems, ok := schema["minItems"].(float64); ok {
-		if length < int(minItems) {
-			errors = append(errors, fmt.Sprintf("array length %d is less than minItems %d", length, int(minItems)))
-		}
-	} else if minItems, ok := schema["minItems"].(int); ok {
-		if length < minItems {
-			errors = append(errors, fmt.Sprintf("array length %d is less than minItems %d", length, minItems))
+	
+	// Check array length constraints
+	if minItems, exists := schema["minItems"]; exists {
+		if err := checkArrayLengthConstraint(length, minItems, true); err != nil {
+			errors = append(errors, err.Error())
 		}
 	}
-	if maxItems, ok := schema["maxItems"].(float64); ok {
-		if length > int(maxItems) {
-			errors = append(errors, fmt.Sprintf("array length %d exceeds maxItems %d", length, int(maxItems)))
-		}
-	} else if maxItems, ok := schema["maxItems"].(int); ok {
-		if length > maxItems {
-			errors = append(errors, fmt.Sprintf("array length %d exceeds maxItems %d", length, maxItems))
+	
+	if maxItems, exists := schema["maxItems"]; exists {
+		if err := checkArrayLengthConstraint(length, maxItems, false); err != nil {
+			errors = append(errors, err.Error())
 		}
 	}
 
 	// Validate items
 	if itemSchema, ok := schema["items"].(map[string]interface{}); ok {
-		for i := 0; i < length; i++ {
-			item := dataArray.Index(i).Interface()
-			isValid, itemErrors := sv.validateAgainstSchema(item, itemSchema)
-			if !isValid {
-				for _, err := range itemErrors {
-					errors = append(errors, fmt.Sprintf("item[%d]: %s", i, err))
-				}
-			}
-		}
+		errors = append(errors, sv.validateArrayItems(dataArray, itemSchema)...)
 	}
 
 	return errors
@@ -279,56 +323,79 @@ func (sv *SchemaValidator) validateString(data interface{}, schema map[string]in
 }
 
 // validateNumber validates a number against number schema
+// toFloat64 converts numeric types to float64
+func toFloat64(val interface{}) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case float32:
+		return float64(v), true
+	default:
+		return 0, false
+	}
+}
+
+// extractNumber converts data to float64 and determines if it's an integer
+func extractNumber(data interface{}) (float64, bool, error) {
+	switch v := data.(type) {
+	case int:
+		return float64(v), true, nil
+	case int64:
+		return float64(v), true, nil
+	case float32:
+		return float64(v), false, nil
+	case float64:
+		return v, false, nil
+	default:
+		return 0, false, fmt.Errorf("data is not a number")
+	}
+}
+
+// checkNumericConstraint checks if a number violates min/max constraints
+func checkNumericConstraint(num float64, constraint interface{}, isMin bool) (float64, error) {
+	if val, ok := toFloat64(constraint); ok {
+		if isMin && num < val {
+			return val, fmt.Errorf("less than minimum")
+		} else if !isMin && num > val {
+			return val, fmt.Errorf("exceeds maximum")
+		}
+		return val, nil
+	}
+	return 0, fmt.Errorf("invalid constraint type")
+}
+
 func (sv *SchemaValidator) validateNumber(data interface{}, schema map[string]interface{}) []string {
 	var errors []string
 
-	var num float64
-	var isInt bool
-	switch v := data.(type) {
-	case int:
-		num = float64(v)
-		isInt = true
-	case int64:
-		num = float64(v)
-		isInt = true
-	case float32:
-		num = float64(v)
-	case float64:
-		num = v
-	default:
-		return []string{"data is not a number"}
+	num, isInt, err := extractNumber(data)
+	if err != nil {
+		return []string{err.Error()}
 	}
 
 	// Check minimum
-	if minimum, ok := schema["minimum"].(float64); ok {
-		if num < minimum {
-			errors = append(errors, fmt.Sprintf("number %f is less than minimum %f", num, minimum))
-		}
-	} else if minimum, ok := schema["minimum"].(int); ok {
-		if num < float64(minimum) {
-			errors = append(errors, fmt.Sprintf("number %f is less than minimum %d", num, minimum))
+	if minimum, exists := schema["minimum"]; exists {
+		if minVal, err := checkNumericConstraint(num, minimum, true); err != nil && err.Error() == "less than minimum" {
+			errors = append(errors, fmt.Sprintf("number %f is less than minimum %f", num, minVal))
 		}
 	}
 
 	// Check maximum
-	if maximum, ok := schema["maximum"].(float64); ok {
-		if num > maximum {
-			errors = append(errors, fmt.Sprintf("number %f exceeds maximum %f", num, maximum))
-		}
-	} else if maximum, ok := schema["maximum"].(int); ok {
-		if num > float64(maximum) {
-			errors = append(errors, fmt.Sprintf("number %f exceeds maximum %d", num, maximum))
+	if maximum, exists := schema["maximum"]; exists {
+		if maxVal, err := checkNumericConstraint(num, maximum, false); err != nil && err.Error() == "exceeds maximum" {
+			errors = append(errors, fmt.Sprintf("number %f exceeds maximum %f", num, maxVal))
 		}
 	}
 
 	// Check multipleOf
-	if multipleOf, ok := schema["multipleOf"].(float64); ok {
-		if isInt && int(num)%int(multipleOf) != 0 {
-			errors = append(errors, fmt.Sprintf("number %f is not a multiple of %f", num, multipleOf))
-		}
-	} else if multipleOf, ok := schema["multipleOf"].(int); ok {
-		if isInt && int(num)%multipleOf != 0 {
-			errors = append(errors, fmt.Sprintf("number %f is not a multiple of %d", num, multipleOf))
+	if multipleOf, exists := schema["multipleOf"]; exists {
+		if multVal, ok := toFloat64(multipleOf); ok && isInt {
+			if int(num)%int(multVal) != 0 {
+				errors = append(errors, fmt.Sprintf("number %f is not a multiple of %f", num, multVal))
+			}
 		}
 	}
 

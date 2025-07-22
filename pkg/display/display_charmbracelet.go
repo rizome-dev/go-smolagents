@@ -198,7 +198,6 @@ func (d *CharmDisplay) Rule(title string) {
 	if leftPadding < 3 {
 		leftPadding = 3
 		rightPadding = 3
-		ruleWidth = titleLen + 6
 	}
 
 	rule := strings.Repeat(ruleChar, leftPadding) +

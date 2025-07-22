@@ -798,68 +798,108 @@ func (ddg *DuckDuckGoSearchTool) forward(args ...interface{}) (interface{}, erro
 	return ddg.searchDuckDuckGo(query, maxResults)
 }
 
-func (ddg *DuckDuckGoSearchTool) searchDuckDuckGo(query string, maxResults int) (string, error) {
-	// DuckDuckGo instant answer API
+// makeRequest creates and executes the HTTP request to DuckDuckGo
+func (ddg *DuckDuckGoSearchTool) makeRequest(query string) ([]byte, error) {
 	searchURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1",
 		url.QueryEscape(query))
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", ddg.UserAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("DuckDuckGo request failed: %w", err)
+		return nil, fmt.Errorf("DuckDuckGo request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("DuckDuckGo request failed with status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("DuckDuckGo request failed with status: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read DuckDuckGo response: %w", err)
+		return nil, fmt.Errorf("failed to read DuckDuckGo response: %w", err)
 	}
 
+	return body, nil
+}
+
+// parseResponse parses the JSON response from DuckDuckGo
+func (ddg *DuckDuckGoSearchTool) parseResponse(body []byte) (map[string]interface{}, error) {
 	var result map[string]interface{}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("failed to parse DuckDuckGo response: %w", err)
+		return nil, fmt.Errorf("failed to parse DuckDuckGo response: %w", err)
+	}
+	return result, nil
+}
+
+// formatAbstract adds the abstract/summary to the output if present
+func (ddg *DuckDuckGoSearchTool) formatAbstract(result map[string]interface{}, output *strings.Builder) {
+	if abstract, ok := result["Abstract"].(string); ok && abstract != "" {
+		output.WriteString(fmt.Sprintf("Summary: %s\n\n", abstract))
+	}
+}
+
+// formatRelatedTopics adds related topics to the output
+func (ddg *DuckDuckGoSearchTool) formatRelatedTopics(result map[string]interface{}, output *strings.Builder, maxResults int) {
+	relatedTopics, ok := result["RelatedTopics"].([]interface{})
+	if !ok || len(relatedTopics) == 0 {
+		return
+	}
+
+	output.WriteString("Related topics:\n")
+	count := 0
+	for _, topic := range relatedTopics {
+		if count >= maxResults {
+			break
+		}
+		
+		topicMap, ok := topic.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		text, textOk := topicMap["Text"].(string)
+		firstURL, urlOk := topicMap["FirstURL"].(string)
+		
+		if textOk && text != "" && urlOk {
+			output.WriteString(fmt.Sprintf("- %s\n  URL: %s\n", text, firstURL))
+			count++
+		}
+	}
+}
+
+// searchDuckDuckGo performs the search and returns formatted results
+func (ddg *DuckDuckGoSearchTool) searchDuckDuckGo(query string, maxResults int) (string, error) {
+	// Make the HTTP request
+	body, err := ddg.makeRequest(query)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse the response
+	result, err := ddg.parseResponse(body)
+	if err != nil {
+		return "", err
 	}
 
 	// Format results
 	var output strings.Builder
 	output.WriteString(fmt.Sprintf("DuckDuckGo search results for: %s\n\n", query))
 
-	// Check for instant answer
-	if abstract, ok := result["Abstract"].(string); ok && abstract != "" {
-		output.WriteString(fmt.Sprintf("Summary: %s\n\n", abstract))
-	}
+	// Add abstract if present
+	ddg.formatAbstract(result, &output)
 
-	// Check for related topics
-	if relatedTopics, ok := result["RelatedTopics"].([]interface{}); ok && len(relatedTopics) > 0 {
-		output.WriteString("Related topics:\n")
-		count := 0
-		for _, topic := range relatedTopics {
-			if count >= maxResults {
-				break
-			}
-			if topicMap, ok := topic.(map[string]interface{}); ok {
-				if text, ok := topicMap["Text"].(string); ok && text != "" {
-					if firstURL, ok := topicMap["FirstURL"].(string); ok {
-						output.WriteString(fmt.Sprintf("- %s\n  URL: %s\n", text, firstURL))
-						count++
-					}
-				}
-			}
-		}
-	}
+	// Add related topics
+	ddg.formatRelatedTopics(result, &output, maxResults)
 
-	if output.Len() == 0 {
+	// Check if we have any results
+	if output.Len() == len(fmt.Sprintf("DuckDuckGo search results for: %s\n\n", query)) {
 		return fmt.Sprintf("No results found for query: %s", query), nil
 	}
 

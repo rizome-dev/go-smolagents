@@ -156,8 +156,8 @@ func (bm *AmazonBedrockModel) ToDict() map[string]interface{} {
 	return result
 }
 
-// prepareCompletionKwargs prepares the completion arguments for Bedrock API
-func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, options *GenerateOptions) (map[string]interface{}, error) {
+// processMessages handles message cleaning and type field removal
+func (bm *AmazonBedrockModel) processMessages(messages []interface{}) ([]map[string]interface{}, error) {
 	// Convert role conversions
 	roleConversions := make(map[MessageRole]MessageRole)
 	for k, v := range bm.CustomRoleConversions {
@@ -181,34 +181,41 @@ func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, op
 		}
 	}
 
-	// Prepare base parameters
-	kwargs := map[string]interface{}{
-		"modelId":  bm.ModelID,
-		"messages": cleanMessages,
-	}
+	return cleanMessages, nil
+}
 
-	// Add inference configuration
+// buildInferenceConfig creates inference configuration from options
+func (bm *AmazonBedrockModel) buildInferenceConfig(options *GenerateOptions) map[string]interface{} {
 	if len(bm.InferenceConfig) > 0 {
-		kwargs["inferenceConfig"] = bm.InferenceConfig
-	} else if options != nil {
-		inferenceConfig := make(map[string]interface{})
-		if options.MaxTokens != nil {
-			inferenceConfig["maxTokens"] = *options.MaxTokens
-		}
-		if options.Temperature != nil {
-			inferenceConfig["temperature"] = *options.Temperature
-		}
-		if options.TopP != nil {
-			inferenceConfig["topP"] = *options.TopP
-		}
-		if len(options.StopSequences) > 0 {
-			inferenceConfig["stopSequences"] = options.StopSequences
-		}
-		if len(inferenceConfig) > 0 {
-			kwargs["inferenceConfig"] = inferenceConfig
-		}
+		return bm.InferenceConfig
+	}
+	
+	if options == nil {
+		return nil
 	}
 
+	inferenceConfig := make(map[string]interface{})
+	if options.MaxTokens != nil {
+		inferenceConfig["maxTokens"] = *options.MaxTokens
+	}
+	if options.Temperature != nil {
+		inferenceConfig["temperature"] = *options.Temperature
+	}
+	if options.TopP != nil {
+		inferenceConfig["topP"] = *options.TopP
+	}
+	if len(options.StopSequences) > 0 {
+		inferenceConfig["stopSequences"] = options.StopSequences
+	}
+	
+	if len(inferenceConfig) == 0 {
+		return nil
+	}
+	return inferenceConfig
+}
+
+// applyAdditionalConfigs adds guardrail and additional model fields to kwargs
+func (bm *AmazonBedrockModel) applyAdditionalConfigs(kwargs map[string]interface{}) {
 	// Add guardrail configuration
 	if len(bm.GuardrailConfig) > 0 {
 		kwargs["guardrailConfig"] = bm.GuardrailConfig
@@ -218,6 +225,29 @@ func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, op
 	for k, v := range bm.AdditionalModelFields {
 		kwargs[k] = v
 	}
+}
+
+// prepareCompletionKwargs prepares the completion arguments for Bedrock API
+func (bm *AmazonBedrockModel) prepareCompletionKwargs(messages []interface{}, options *GenerateOptions) (map[string]interface{}, error) {
+	// Process messages
+	cleanMessages, err := bm.processMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare base parameters
+	kwargs := map[string]interface{}{
+		"modelId":  bm.ModelID,
+		"messages": cleanMessages,
+	}
+
+	// Add inference configuration
+	if inferenceConfig := bm.buildInferenceConfig(options); inferenceConfig != nil {
+		kwargs["inferenceConfig"] = inferenceConfig
+	}
+
+	// Apply additional configurations
+	bm.applyAdditionalConfigs(kwargs)
 
 	return kwargs, nil
 }
