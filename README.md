@@ -15,8 +15,6 @@ contact us: [hi (at) rizome.dev](mailto:hi@rizome.dev)
 
 ## Quick Start
 
-### Simple Usage
-
 ```go
 package main
 
@@ -71,14 +69,9 @@ func main() {
 }
 ```
 
-## Comprehensive Usage Guide
-
-### Installation & Setup
+## Usage Guide
 
 ```bash
-# Install the library
-go get github.com/rizome-dev/go-smolagents
-
 # Required: Set up at least one model API key
 export HF_TOKEN="your-huggingface-token"         # For HuggingFace models
 export OPENAI_API_KEY="your-openai-key"          # For OpenAI models
