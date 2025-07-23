@@ -49,10 +49,10 @@ go get -u ./...
 go mod tidy
 
 # Run examples
-cd examples/react_code_agent && go run main.go  # ReAct code agent with Thought/Code/Observation cycles
+cd examples/react && go run main.go  # ReAct code agent with Thought/Code/Observation cycles
 
 # Build example binaries
-cd examples/react_code_agent && go build -o react_code_agent
+cd examples/react && go build -o react_agent
 ```
 
 ## Architecture Overview
@@ -156,6 +156,10 @@ When adding tests, follow existing patterns and aim for comprehensive coverage o
 - `golang.org/x/crypto` - Cryptographic libraries (security-critical)
 - Third-party dependencies with known CVEs
 
+### Environment Variables
+- API keys should be stored in `.env` files (git-ignored)
+- Never commit `.env` files or expose API keys in code
+
 ### Automation Checklist
 When working on this codebase, Claude should:
 1. Check Go Report Card status first
@@ -227,3 +231,11 @@ The parser extracts structured information from LLM responses:
 - Error handling uses custom error types defined in `utils/` package
 - The parser dynamically adapts to different LLM response formats
 - Display package provides consistent CLI formatting across all agent outputs
+
+## Documentation
+
+Full API documentation is available at: https://pkg.go.dev/github.com/rizome-dev/go-smolagents
+
+## License
+
+Apache License 2.0 - see [LICENSE](LICENSE) file for details
